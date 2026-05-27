@@ -34,7 +34,7 @@ function todayIso(): string {
 
 function parseSearchParams(params: SearchParams) {
   let days = parseInt(params.days || "14", 10);
-  if (![7, 14, 30].includes(days)) days = 14;
+  if (![7, 14, 30, 60, 90, 180].includes(days)) days = 14;
 
   let startStr = params.start ?? "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startStr)) {
@@ -223,6 +223,9 @@ function DateNavigation({
           <option value="7">7 days</option>
           <option value="14">14 days</option>
           <option value="30">30 days</option>
+          <option value="60">2 months</option>
+          <option value="90">3 months</option>
+          <option value="180">6 months</option>
         </select>
         <Button type="submit" size="sm">
           Go
@@ -255,10 +258,19 @@ export default async function CalendarPage({
   ];
 
   const dateCount = dates.length;
+
+  // For ranges > 30 days, switch to compact mode: narrower cells, no guest
+  // names in cells, simpler date headers. Designed for spotting open/booked
+  // patterns rather than reading individual bookings.
+  const isCompact = days > 30;
+  const cellMinPx = isCompact ? 28 : 72;
+  const labelColPx = isCompact ? 140 : 180;
+  const cellHeightClass = isCompact ? "min-h-[30px]" : "min-h-[44px]";
+
   // Grid columns: 1 fixed-width room label + N date columns.
   // Using inline style because Tailwind can't generate dynamic grid templates.
   const gridStyle = {
-    gridTemplateColumns: `180px repeat(${dateCount}, minmax(72px, 1fr))`,
+    gridTemplateColumns: `${labelColPx}px repeat(${dateCount}, minmax(${cellMinPx}px, 1fr))`,
   };
 
   return (
@@ -293,22 +305,40 @@ export default async function CalendarPage({
                 const isTodayCol = dateStr === today;
                 const dow = d.getDay();
                 const isWeekend = dow === 0 || dow === 6;
+                const isFirstOfMonth = d.getDate() === 1;
                 return (
                   <div
                     key={`h-${dateStr}`}
                     className={cn(
-                      "border-b border-border px-1 py-2 text-center text-[11px]",
+                      "border-b border-border text-center",
+                      isCompact ? "px-0.5 py-1" : "px-1 py-2 text-[11px]",
                       isWeekend && "bg-muted/40",
                       isTodayCol &&
-                        "bg-primary/10 text-primary font-medium border-x border-primary/40"
+                        "bg-primary/10 text-primary font-medium border-x border-primary/40",
+                      isFirstOfMonth && isCompact && "border-l-2 border-l-foreground/40"
                     )}
                   >
-                    <div className="uppercase tracking-wider">
-                      {format(d, "EEE")}
-                    </div>
-                    <div className="tabular-nums font-medium mt-0.5">
-                      {format(d, "d MMM")}
-                    </div>
+                    {isCompact ? (
+                      <>
+                        {(isFirstOfMonth || dateStr === today) && (
+                          <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
+                            {format(d, "MMM")}
+                          </div>
+                        )}
+                        <div className="tabular-nums text-[10px] font-medium">
+                          {d.getDate()}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="uppercase tracking-wider">
+                          {format(d, "EEE")}
+                        </div>
+                        <div className="tabular-nums font-medium mt-0.5">
+                          {format(d, "d MMM")}
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -328,14 +358,20 @@ export default async function CalendarPage({
                     <React.Fragment key={`row-${room.id}`}>
                       <Link
                         href={`/rooms/${room.id}`}
-                        className="sticky left-0 z-10 bg-card border-r border-b border-border px-3 py-2 hover:bg-muted/40 transition-colors"
+                        className={cn(
+                          "sticky left-0 z-10 bg-card border-r border-b border-border hover:bg-muted/40 transition-colors flex flex-col justify-center",
+                          isCompact ? "px-2 py-1" : "px-3 py-2",
+                          cellHeightClass
+                        )}
                       >
-                        <div className="font-medium text-xs">
+                        <div className={cn("font-medium", isCompact ? "text-[11px]" : "text-xs")}>
                           #{room.room_number}
                         </div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {room.name}
-                        </div>
+                        {!isCompact && (
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {room.name}
+                          </div>
+                        )}
                       </Link>
 
                       {dates.map((d) => {
@@ -355,14 +391,18 @@ export default async function CalendarPage({
                                 booking.bookingCode
                               } · ${statusLabel(booking.status)}`}
                               className={cn(
-                                "border-b border-border px-1.5 py-2 text-[11px] truncate transition-colors min-h-[44px] flex items-center",
+                                "border-b border-border truncate transition-colors flex items-center",
+                                cellHeightClass,
+                                isCompact ? "px-0" : "px-1.5 py-2 text-[11px]",
                                 statusCellClasses(booking.status),
                                 isTodayCol && "ring-1 ring-inset ring-primary/40"
                               )}
                             >
-                              <span className="truncate">
-                                {isFirstDay ? booking.guestName : "·"}
-                              </span>
+                              {!isCompact && (
+                                <span className="truncate">
+                                  {isFirstDay ? booking.guestName : "·"}
+                                </span>
+                              )}
                             </Link>
                           );
                         }
@@ -370,7 +410,8 @@ export default async function CalendarPage({
                           <div
                             key={`c-${room.id}-${dateStr}`}
                             className={cn(
-                              "border-b border-border min-h-[44px]",
+                              "border-b border-border",
+                              cellHeightClass,
                               isWeekend && "bg-muted/30",
                               isTodayCol && "bg-primary/5"
                             )}
