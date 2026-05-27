@@ -151,7 +151,10 @@ function FilterBar({ params }: { params: SearchParams }) {
 
 function BookingRow({ booking }: { booking: Booking }) {
   return (
-    <div className="border-b border-border last:border-b-0 px-4 py-3 hover:bg-muted/40 transition-colors">
+    <Link
+      href={`/bookings/${booking.id}`}
+      className="block border-b border-border last:border-b-0 px-4 py-3 hover:bg-muted/40 transition-colors"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-2 flex-wrap">
@@ -206,7 +209,7 @@ function BookingRow({ booking }: { booking: Booking }) {
           </p>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
