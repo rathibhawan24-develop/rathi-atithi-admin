@@ -10,6 +10,7 @@ import {
   X as XIcon,
   Loader2,
   AlertTriangle,
+  IndianRupee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { formatCurrency } from "@/lib/utils";
 import { updateBookingStatus } from "./actions";
 import type { BookingStatus } from "@/lib/types";
 
@@ -39,14 +41,21 @@ type Props = {
   bookingId: string;
   status: BookingStatus;
   hasIdProof: boolean;
+  balance: number;
 };
 
-export function BookingActionsBar({ bookingId, status, hasIdProof }: Props) {
+export function BookingActionsBar({
+  bookingId,
+  status,
+  hasIdProof,
+  balance,
+}: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [checkInWarning, setCheckInWarning] = useState(false);
+  const [balanceBlocked, setBalanceBlocked] = useState(false);
 
   const runTransition = (
     newStatus: BookingStatus,
@@ -72,6 +81,14 @@ export function BookingActionsBar({ bookingId, status, hasIdProof }: Props) {
       return;
     }
     runTransition("checked_in", undefined, "Guest checked in.");
+  };
+
+  const handleCheckOut = () => {
+    if (balance > 0) {
+      setBalanceBlocked(true);
+      return;
+    }
+    runTransition("checked_out", undefined, "Guest checked out.");
   };
 
   const handleConfirmCancel = () => {
@@ -116,12 +133,7 @@ export function BookingActionsBar({ bookingId, status, hasIdProof }: Props) {
           </Button>
         )}
         {canCheckOut && (
-          <Button
-            onClick={() =>
-              runTransition("checked_out", undefined, "Guest checked out.")
-            }
-            disabled={isPending}
-          >
+          <Button onClick={handleCheckOut} disabled={isPending}>
             {isPending ? <Loader2 className="animate-spin" /> : <LogOut />}
             Check out
           </Button>
@@ -213,6 +225,30 @@ export function BookingActionsBar({ bookingId, status, hasIdProof }: Props) {
               }}
             >
               Check in anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Check-out blocked: outstanding balance */}
+      <AlertDialog open={balanceBlocked} onOpenChange={setBalanceBlocked}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <IndianRupee className="h-5 w-5 text-destructive" />
+              Outstanding balance: {formatCurrency(balance)}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This guest cannot be checked out while a balance is owed. Please
+              record a payment for the outstanding amount, or — if the balance
+              is being written off — record an offsetting payment with a note
+              explaining why (e.g. &quot;Compensation for service issue&quot;).
+              Once balance is zero or negative, check-out will be allowed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setBalanceBlocked(false)}>
+              Go to payment ledger
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

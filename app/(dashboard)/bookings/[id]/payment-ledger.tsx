@@ -83,6 +83,15 @@ export function PaymentLedger({
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
 
+  // Compute gross paid and refunded amounts for display clarity.
+  // (paid_amount in DB is the net = grossPaid - refundedTotal)
+  const grossPaid = payments
+    .filter((p) => Number(p.amount) > 0)
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+  const refundedTotal = payments
+    .filter((p) => Number(p.amount) < 0)
+    .reduce((sum, p) => sum + Math.abs(Number(p.amount)), 0);
+
   const openAddPayment = (refundMode: boolean) => {
     setIsRefund(refundMode);
     setAmount(refundMode ? 0 : Math.max(0, balance));
@@ -134,39 +143,51 @@ export function PaymentLedger({
   return (
     <div className="space-y-4">
       {/* Totals summary */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4 pb-4 border-b border-border">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            Total
-          </p>
-          <p className="text-xl font-semibold tabular-nums mt-1">
-            {formatCurrency(total)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            Paid
-          </p>
-          <p className="text-xl font-semibold tabular-nums mt-1">
-            {formatCurrency(paid)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            Balance
-          </p>
-          <p
-            className={cn(
-              "text-xl font-semibold tabular-nums mt-1",
-              balance > 0
-                ? "text-destructive"
-                : balance < 0
-                ? "text-warning"
-                : "text-success"
+      <div className="pb-4 border-b border-border">
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              Total
+            </p>
+            <p className="text-xl font-semibold tabular-nums mt-1">
+              {formatCurrency(total)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              Paid
+            </p>
+            <p className="text-xl font-semibold tabular-nums mt-1">
+              {formatCurrency(paid)}
+            </p>
+            {refundedTotal > 0 && (
+              <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                {formatCurrency(grossPaid)} received − {formatCurrency(refundedTotal)} refunded
+              </p>
             )}
-          >
-            {formatCurrency(balance)}
-          </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              Balance
+            </p>
+            <p
+              className={cn(
+                "text-xl font-semibold tabular-nums mt-1",
+                balance > 0
+                  ? "text-destructive"
+                  : balance < 0
+                  ? "text-warning"
+                  : "text-success"
+              )}
+            >
+              {formatCurrency(balance)}
+            </p>
+            {balance < 0 && (
+              <p className="text-xs text-warning mt-0.5">
+                Guest overpaid
+              </p>
+            )}
+          </div>
         </div>
       </div>
 

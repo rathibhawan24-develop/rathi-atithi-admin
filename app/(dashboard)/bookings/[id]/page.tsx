@@ -214,6 +214,7 @@ export default async function BookingDetailPage({
             bookingId={booking.id}
             status={booking.status}
             hasIdProof={!!(booking.id_proof_type && booking.id_proof_number)}
+            balance={balance}
           />
         </div>
         {booking.status === "cancelled" && booking.cancellation_reason && (
