@@ -14,6 +14,7 @@ import {
   BedDouble,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { SyncStatus } from "@/components/sync-status";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
         <h1 className="font-display text-3xl md:text-4xl tracking-tight">
           Dashboard
         </h1>
@@ -115,6 +117,8 @@ export default async function DashboardPage() {
             year: "numeric",
           })}
         </p>
+        </div>
+        <SyncStatus />
       </header>
 
       <section className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

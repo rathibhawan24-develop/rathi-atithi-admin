@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, formatDateTime, cn } from "@/lib/utils";
+import { SyncStatus } from "@/components/sync-status";
 import type { Booking, BookingStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -243,6 +244,9 @@ export default async function BookingsPage({
               : `${bookings.length} booking${bookings.length === 1 ? "" : "s"}`}
             {hasFilters && " · filtered"}
           </p>
+          <div className="mt-2">
+            <SyncStatus autoRefreshSeconds={60} />
+          </div>
         </div>
         <Button asChild>
           <Link href="/bookings/new">
