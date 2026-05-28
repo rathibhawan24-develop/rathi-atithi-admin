@@ -22,7 +22,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { BookingActionsBar } from "./booking-actions-bar";
 import { PaymentLedger } from "./payment-ledger";
 import { GuestEditButton } from "./guest-edit-form";
@@ -207,14 +207,13 @@ export default async function BookingDetailPage({
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-1 font-mono">
-              {booking.booking_code} · created {formatDate(booking.created_at)}
+              {booking.booking_code} · created {formatDateTime(booking.created_at)}
             </p>
           </div>
           <BookingActionsBar
             bookingId={booking.id}
             status={booking.status}
             hasIdProof={!!(booking.id_proof_type && booking.id_proof_number)}
-            balance={balance}
           />
         </div>
         {booking.status === "cancelled" && booking.cancellation_reason && (

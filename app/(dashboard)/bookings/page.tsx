@@ -12,7 +12,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDateTime, cn } from "@/lib/utils";
 import type { Booking, BookingStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -188,6 +188,9 @@ function BookingRow({ booking }: { booking: Booking }) {
           </p>
           <p className="text-xs text-muted-foreground">
             {booking.nights} night{booking.nights === 1 ? "" : "s"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Booked {formatDateTime(booking.created_at)}
           </p>
         </div>
 
