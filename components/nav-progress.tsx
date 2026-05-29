@@ -2,39 +2,41 @@
 
 import { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
-// Thin progress bar at the top of the page that animates during route changes.
-// Gives instant feedback when a link is clicked, before loading.tsx (the page
-// skeleton) takes over.
+// Small floating "Loading…" popup that appears the instant a link is clicked
+// and disappears once the destination page renders. Gives clear feedback so
+// nobody is left wondering whether the click registered.
 export function NavProgress() {
   const pathname = usePathname();
-  const [progress, setProgress] = useState(0);
   const [visible, setVisible] = useState(false);
   const firstRender = useRef(true);
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimers = () => {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+    if (safetyTimerRef.current) {
+      clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = null;
+    }
   };
 
-  // Complete the bar when the new path is rendered
+  // Hide when the new path is rendered (with a tiny delay so it doesn't
+  // flicker for instant navigations).
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
       return;
     }
-    clearTimers();
-    setProgress(100);
-    timersRef.current.push(
-      setTimeout(() => {
-        setVisible(false);
-        setProgress(0);
-      }, 350)
-    );
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setVisible(false), 150);
   }, [pathname]);
 
-  // Start the bar as soon as a link is clicked
+  // Show as soon as a link is clicked.
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey)
@@ -50,10 +52,8 @@ export function NavProgress() {
 
       clearTimers();
       setVisible(true);
-      setProgress(15);
-      timersRef.current.push(setTimeout(() => setProgress(45), 120));
-      timersRef.current.push(setTimeout(() => setProgress(75), 400));
-      timersRef.current.push(setTimeout(() => setProgress(88), 900));
+      // Safety net: never let the popup get stuck on screen.
+      safetyTimerRef.current = setTimeout(() => setVisible(false), 8000);
     };
     document.addEventListener("click", onClick);
     return () => {
@@ -62,19 +62,18 @@ export function NavProgress() {
     };
   }, [pathname]);
 
+  if (!visible) return null;
+
   return (
     <div
-      aria-hidden
-      className="fixed top-0 left-0 right-0 z-[60] h-0.5 pointer-events-none"
-      style={{ opacity: visible ? 1 : 0, transition: "opacity 200ms" }}
+      role="status"
+      aria-live="polite"
+      className="fixed top-20 md:top-6 left-1/2 -translate-x-1/2 z-[60] pointer-events-none animate-in fade-in slide-in-from-top-2 duration-200"
     >
-      <div
-        className="h-full bg-primary shadow-[0_0_8px_rgba(0,0,0,0.2)]"
-        style={{
-          width: `${progress}%`,
-          transition: "width 350ms ease-out",
-        }}
-      />
+      <div className="inline-flex items-center gap-2.5 rounded-full bg-card/95 backdrop-blur border border-border px-4 py-2 shadow-lg">
+        <Loader2 className="h-4 w-4 text-primary animate-spin" />
+        <span className="text-sm font-medium text-foreground">Loading…</span>
+      </div>
     </div>
   );
 }
