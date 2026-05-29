@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/nav/sidebar";
+import { NavProgress } from "@/components/nav-progress";
+import { AlertSound } from "@/components/alert-sound";
 
 export default async function DashboardLayout({
   children,
@@ -31,12 +33,14 @@ export default async function DashboardLayout({
   // on desktop it's a row (sidebar beside content).
   return (
     <div className="md:flex min-h-screen bg-background">
+      <NavProgress />
       <Sidebar userEmail={profile.email} userRole={profile.role} />
       <main className="flex-1 overflow-x-hidden">
         <div className="px-4 py-5 sm:px-6 md:px-8 md:py-8 max-w-7xl mx-auto animate-fade-in">
           {children}
         </div>
       </main>
+      <AlertSound />
     </div>
   );
 }
