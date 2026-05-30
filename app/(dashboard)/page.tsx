@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -6,12 +7,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  CalendarCheck,
   LogIn,
   LogOut,
   Clock,
   IndianRupee,
   BedDouble,
+  ArrowUpRight,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { SyncStatus } from "@/components/sync-status";
@@ -75,30 +76,35 @@ export default async function DashboardPage() {
       value: stats.checkInsToday,
       icon: LogIn,
       tone: "text-success",
+      href: "/bookings?view=checkins_today",
     },
     {
       label: "Check-outs today",
       value: stats.checkOutsToday,
       icon: LogOut,
       tone: "text-primary",
+      href: "/bookings?view=checkouts_today",
     },
     {
       label: "Pending confirmations",
       value: stats.pendingCount,
       icon: Clock,
       tone: "text-warning",
+      href: "/bookings?view=pending",
     },
     {
       label: "Outstanding balance",
       value: formatCurrency(stats.outstandingTotal),
       icon: IndianRupee,
       tone: "text-destructive",
+      href: "/bookings?view=outstanding",
     },
     {
       label: "Active rooms",
       value: stats.totalRooms,
       icon: BedDouble,
       tone: "text-muted-foreground",
+      href: "/rooms",
     },
   ];
 
@@ -106,17 +112,18 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-        <h1 className="font-display text-3xl md:text-4xl tracking-tight">
-          Dashboard
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Today at a glance — {new Date().toLocaleDateString("en-IN", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-          })}
-        </p>
+          <h1 className="font-display text-3xl md:text-4xl tracking-tight">
+            Dashboard
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Today at a glance —{" "}
+            {new Date().toLocaleDateString("en-IN", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
+          </p>
         </div>
         <SyncStatus />
       </header>
@@ -125,19 +132,29 @@ export default async function DashboardPage() {
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card key={card.label}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {card.label}
-                </CardTitle>
-                <Icon className={`h-4 w-4 ${card.tone}`} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold tabular-nums">
-                  {card.value}
-                </div>
-              </CardContent>
-            </Card>
+            <Link
+              key={card.label}
+              href={card.href}
+              className="block group focus-visible:outline-none rounded-lg"
+              aria-label={`${card.label}: ${card.value}. View details.`}
+            >
+              <Card className="h-full transition-all group-hover:border-primary/40 group-hover:shadow-md group-hover:-translate-y-0.5 group-focus-visible:ring-2 group-focus-visible:ring-ring">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {card.label}
+                  </CardTitle>
+                  <Icon className={`h-4 w-4 ${card.tone}`} />
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-end justify-between">
+                    <div className="text-2xl font-semibold tabular-nums">
+                      {card.value}
+                    </div>
+                    <ArrowUpRight className="h-4 w-4 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           );
         })}
       </section>
@@ -148,17 +165,18 @@ export default async function DashboardPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Welcome to the Rathi Atithi Bhawan admin dashboard. This is your
-            home screen — once bookings start coming in, today&apos;s
-            check-ins, check-outs, and pending confirmations will appear here.
+            Welcome to the Rathi Atithi Bhawan admin dashboard. Click any card
+            above to see the bookings behind that number — for example,
+            today&apos;s check-ins, today&apos;s check-outs, or who still owes
+            a balance.
           </p>
           <p>
-            The next sections to build out are{" "}
-            <span className="font-medium text-foreground">Rooms</span>{" "}
-            (upload photos, set pricing) and{" "}
-            <span className="font-medium text-foreground">Bookings</span>{" "}
-            (the calendar grid and booking detail screens). Use the sidebar
-            to navigate when those are ready.
+            Use the sidebar to manage{" "}
+            <span className="font-medium text-foreground">Rooms</span>,{" "}
+            <span className="font-medium text-foreground">Add-ons</span>,{" "}
+            <span className="font-medium text-foreground">Pricing</span>, and{" "}
+            <span className="font-medium text-foreground">Settings</span>{" "}
+            whenever you need.
           </p>
         </CardContent>
       </Card>

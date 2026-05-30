@@ -41,15 +41,43 @@ const STATUS_VARIANT: Record<
   expired: "muted",
 };
 
+// Curated "views" — shortcuts the dashboard cards link to. Filters here MUST
+// mirror the count queries in the dashboard so card-number == list-length.
+type ViewKey =
+  | "checkins_today"
+  | "checkouts_today"
+  | "pending"
+  | "outstanding";
+
+const VIEW_LABELS: Record<ViewKey, string> = {
+  checkins_today: "Check-ins today",
+  checkouts_today: "Check-outs today",
+  pending: "Pending confirmations",
+  outstanding: "Outstanding balance",
+};
+
+const VIEW_DESCRIPTIONS: Record<ViewKey, string> = {
+  checkins_today:
+    "Guests with today's check-in date (confirmed or pending bookings).",
+  checkouts_today:
+    "Guests currently checked in whose check-out date is today.",
+  pending: "Bookings awaiting confirmation.",
+  outstanding:
+    "Active bookings (confirmed or checked-in) with a balance still due.",
+};
+
 type SearchParams = {
   status?: string;
   q?: string;
   from?: string;
   to?: string;
+  view?: string;
 };
 
 async function getBookings(params: SearchParams) {
   const supabase = createClient();
+  const today = new Date().toISOString().slice(0, 10);
+
   let query = supabase
     .from("bookings")
     .select(
@@ -58,23 +86,45 @@ async function getBookings(params: SearchParams) {
     .order("created_at", { ascending: false })
     .limit(100);
 
-  if (
-    params.status &&
-    Object.keys(STATUS_LABELS).includes(params.status)
-  ) {
-    query = query.eq("status", params.status);
-  }
+  const view = params.view as ViewKey | undefined;
 
-  if (params.from) {
-    query = query.gte("check_in", params.from);
-  }
-  if (params.to) {
-    query = query.lte("check_in", params.to);
+  if (view && VIEW_LABELS[view]) {
+    // A view overrides the manual status/date filters. Search (q) still applies.
+    switch (view) {
+      case "checkins_today":
+        query = query
+          .eq("check_in", today)
+          .in("status", ["confirmed", "pending"]);
+        break;
+      case "checkouts_today":
+        query = query.eq("check_out", today).eq("status", "checked_in");
+        break;
+      case "pending":
+        query = query.eq("status", "pending");
+        break;
+      case "outstanding":
+        query = query
+          .gt("balance", 0)
+          .in("status", ["confirmed", "checked_in"]);
+        break;
+    }
+  } else {
+    if (
+      params.status &&
+      Object.keys(STATUS_LABELS).includes(params.status)
+    ) {
+      query = query.eq("status", params.status);
+    }
+    if (params.from) {
+      query = query.gte("check_in", params.from);
+    }
+    if (params.to) {
+      query = query.lte("check_in", params.to);
+    }
   }
 
   if (params.q && params.q.trim()) {
     const q = params.q.trim();
-    // search by name, phone, or booking code
     query = query.or(
       `guest_name.ilike.%${q}%,phone.ilike.%${q}%,booking_code.ilike.%${q}%`
     );
@@ -86,6 +136,30 @@ async function getBookings(params: SearchParams) {
     return [] as Booking[];
   }
   return (data ?? []) as Booking[];
+}
+
+function ViewBanner({ view }: { view: ViewKey }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 px-4 py-3">
+      <div className="flex flex-col">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Showing:</span>
+          <span className="font-semibold text-primary">
+            {VIEW_LABELS[view]}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {VIEW_DESCRIPTIONS[view]}
+        </p>
+      </div>
+      <Button asChild variant="outline" size="sm">
+        <Link href="/bookings">
+          <FilterX className="h-3.5 w-3.5" />
+          Clear view
+        </Link>
+      </Button>
+    </div>
+  );
 }
 
 function FilterBar({ params }: { params: SearchParams }) {
@@ -223,12 +297,16 @@ export default async function BookingsPage({
   searchParams: SearchParams;
 }) {
   const bookings = await getBookings(searchParams);
-  const hasFilters = !!(
-    searchParams.status ||
-    searchParams.q ||
-    searchParams.from ||
-    searchParams.to
-  );
+  const view = searchParams.view as ViewKey | undefined;
+  const isView = !!(view && VIEW_LABELS[view]);
+  const hasFilters =
+    isView ||
+    !!(
+      searchParams.status ||
+      searchParams.q ||
+      searchParams.from ||
+      searchParams.to
+    );
 
   return (
     <div className="space-y-6">
@@ -255,6 +333,8 @@ export default async function BookingsPage({
           </Link>
         </Button>
       </header>
+
+      {isView && <ViewBanner view={view as ViewKey} />}
 
       <FilterBar params={searchParams} />
 
