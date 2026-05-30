@@ -16,6 +16,7 @@ import {
   Sparkles,
   Menu,
   X,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -34,7 +35,7 @@ const mainNav: NavItem[] = [
   { label: "New Walk-in", href: "/bookings/new", icon: Plus },
 ];
 
-const managementNav: NavItem[] = [
+const baseManagementNav: NavItem[] = [
   { label: "Rooms", href: "/rooms", icon: BedDouble },
   { label: "Add-ons", href: "/addons", icon: Sparkles },
   { label: "Pricing", href: "/pricing", icon: IndianRupee },
@@ -50,6 +51,13 @@ export function Sidebar({
   userEmail: string;
   userRole: string;
 }) {
+  const managementNav: NavItem[] = [
+    ...baseManagementNav,
+    ...(userRole === "admin"
+      ? [{ label: "Users", href: "/users", icon: UserCog } as NavItem]
+      : []),
+  ];
+
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
