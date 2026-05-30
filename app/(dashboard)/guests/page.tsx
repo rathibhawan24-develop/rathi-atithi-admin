@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
+import { ExcelDownload } from "@/components/excel-download";
 
 export const dynamic = "force-dynamic";
 
@@ -60,14 +61,17 @@ export default async function GuestsPage({
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="font-display text-3xl md:text-4xl tracking-tight flex items-center gap-3">
-          <Users className="h-7 w-7 text-primary" />
-          Guests
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Everyone who has ever booked. Auto-populated from bookings.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl md:text-4xl tracking-tight flex items-center gap-3">
+            <Users className="h-7 w-7 text-primary" />
+            Guests
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Everyone who has ever booked. Auto-populated from bookings.
+          </p>
+        </div>
+        <ExcelDownload type="guests" filters={{ search }} />
       </header>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

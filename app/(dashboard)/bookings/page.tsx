@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, formatDateTime, cn } from "@/lib/utils";
 import { SyncStatus } from "@/components/sync-status";
+import { ExcelDownload } from "@/components/excel-download";
 import type { Booking, BookingStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -326,12 +327,15 @@ export default async function BookingsPage({
             <SyncStatus autoRefreshSeconds={60} />
           </div>
         </div>
-        <Button asChild>
-          <Link href="/bookings/new">
-            <Plus />
-            New walk-in
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelDownload type="bookings" filters={searchParams} />
+          <Button asChild>
+            <Link href="/bookings/new">
+              <Plus />
+              New walk-in
+            </Link>
+          </Button>
+        </div>
       </header>
 
       {isView && <ViewBanner view={view as ViewKey} />}
