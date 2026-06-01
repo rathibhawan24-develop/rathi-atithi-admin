@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   UserCog,
+  Images,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -38,6 +39,7 @@ const mainNav: NavItem[] = [
 const baseManagementNav: NavItem[] = [
   { label: "Rooms", href: "/rooms", icon: BedDouble },
   { label: "Add-ons", href: "/addons", icon: Sparkles },
+  { label: "Gallery", href: "/gallery", icon: Images },
   { label: "Pricing", href: "/pricing", icon: IndianRupee },
   { label: "Guests", href: "/guests", icon: Users },
   { label: "Reports", href: "/reports", icon: Receipt },

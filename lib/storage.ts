@@ -1,6 +1,6 @@
 /**
  * Build a public URL for a file path inside a Supabase Storage bucket.
- * Used to display room photos directly via Supabase's CDN.
+ * Used to display photos directly via Supabase's CDN.
  */
 export function storagePublicUrl(bucket: string, path: string): string {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -15,3 +15,4 @@ export function storagePublicUrl(bucket: string, path: string): string {
 
 export const ROOM_PHOTOS_BUCKET = "room-photos";
 export const GUEST_ID_PROOFS_BUCKET = "guest-id-proofs";
+export const GALLERY_PHOTOS_BUCKET = "gallery-photos";
