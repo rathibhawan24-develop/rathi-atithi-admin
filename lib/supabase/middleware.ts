@@ -45,6 +45,9 @@ export async function updateSession(request: NextRequest) {
   const isPublicAsset =
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/auth") ||
+    // Public booking-email endpoint — called by the customer site without
+    // admin login. CORS preflight (OPTIONS) must also pass through.
+    pathname.startsWith("/api/send-booking-email") ||
     pathname === "/favicon.ico";
 
   // Not logged in and trying to access protected route → redirect to login
