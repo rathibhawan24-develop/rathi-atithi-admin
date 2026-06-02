@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { sendBookingEmail } from "@/lib/send-booking-email";
+import type { EmailStage } from "@/lib/email-templates";
 import type { BookingStatus } from "@/lib/types";
 
 type ActionResult = { success: true } | { success: false; error: string };
@@ -79,6 +81,29 @@ export async function updateBookingStatus(
     .update(updates)
     .eq("id", bookingId);
   if (error) return { success: false, error: error.message };
+
+  // Fire transactional email for this lifecycle stage. We don't fail the
+  // status change if the email fails — log it and proceed.
+  const emailStage: EmailStage | null =
+    newStatus === "confirmed"
+      ? "confirmed"
+      : newStatus === "checked_in"
+        ? "checked_in"
+        : newStatus === "checked_out"
+          ? "checked_out"
+          : null;
+  if (emailStage) {
+    try {
+      const r = await sendBookingEmail(bookingId, emailStage);
+      if (!r.ok) {
+        console.warn(
+          `[updateBookingStatus] email send failed: ${r.error}`
+        );
+      }
+    } catch (e) {
+      console.warn(`[updateBookingStatus] email send threw:`, e);
+    }
+  }
 
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath("/bookings");
