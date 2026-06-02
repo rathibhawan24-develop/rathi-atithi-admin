@@ -183,11 +183,17 @@ export function UserRowActions({
               <div className="flex gap-2">
                 <Input
                   id="new_password"
+                  type="text"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="font-mono"
                   minLength={8}
                   required
+                  autoComplete="off"
+                  spellCheck={false}
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-form-type="other"
                 />
                 <Button
                   type="button"

@@ -49,7 +49,14 @@ export function AddUserDialog() {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+    // Build FormData from React state, NOT the DOM form. This prevents
+    // browser password managers (Chrome, 1Password, LastPass) from replacing
+    // the password we generated with one they've cached for this domain.
+    const formData = new FormData();
+    formData.set("email", email);
+    formData.set("full_name", fullName);
+    formData.set("role", role);
+    formData.set("password", password);
     startTransition(async () => {
       const result = await createUserAction(formData);
       if (!result.ok) {
@@ -140,16 +147,22 @@ export function AddUserDialog() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Temporary password</Label>
+            <Label htmlFor="temp_pw_display">Temporary password</Label>
             <div className="flex gap-2">
               <Input
-                id="password"
-                name="password"
+                id="temp_pw_display"
+                name="temp_pw_display"
+                type="text"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="font-mono"
                 minLength={8}
                 required
+                autoComplete="off"
+                spellCheck={false}
+                data-1p-ignore="true"
+                data-lpignore="true"
+                data-form-type="other"
               />
               <Button
                 type="button"
