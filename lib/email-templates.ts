@@ -44,9 +44,10 @@ export const LINKS = {
   website: "https://rathiatithibhawan.org",
   instagram: "https://www.instagram.com/rathiatithibhawan/",
   googleMaps: "https://maps.app.goo.gl/e8k3G1SyH67v2zb66",
-  whatsapp: "https://wa.me/919431124912", // owner can update later
-  phone: "+91 94311 24912",
-  phoneTel: "+919431124912",
+  whatsapp: "https://wa.me/919028690659",
+  whatsappDisplay: "+91 90286 90659",
+  phone: "+91 82184 18154",
+  phoneTel: "+918218418154",
   email: "rathibhawan24@gmail.com",
 };
 
@@ -207,7 +208,7 @@ function renderShell(opts: {
             <p style="margin:0 0 14px;font-family:${FONT_SANS};font-size:12px;">
               <a href="tel:${LINKS.phoneTel}" style="color:${BRAND.primaryDeep};text-decoration:none;">Call ${LINKS.phone}</a>
               &nbsp;·&nbsp;
-              <a href="${LINKS.whatsapp}" style="color:${BRAND.primaryDeep};text-decoration:none;">WhatsApp</a>
+              <a href="${LINKS.whatsapp}" style="color:${BRAND.primaryDeep};text-decoration:none;">WhatsApp ${LINKS.whatsappDisplay}</a>
               &nbsp;·&nbsp;
               <a href="mailto:${LINKS.email}" style="color:${BRAND.primaryDeep};text-decoration:none;">Email</a>
             </p>
