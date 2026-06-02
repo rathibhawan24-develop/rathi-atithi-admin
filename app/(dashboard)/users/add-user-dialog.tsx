@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { UserRole } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { UserPlus, Loader2, RefreshCw, Copy, Check } from "lucide-react";
@@ -35,14 +36,14 @@ export function AddUserDialog() {
   const [isPending, startTransition] = useTransition();
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<"admin" | "staff">("staff");
+  const [role, setRole] = useState<UserRole>("reception");
   const [password, setPassword] = useState(generatePassword);
   const [copied, setCopied] = useState(false);
 
   const reset = () => {
     setEmail("");
     setFullName("");
-    setRole("staff");
+    setRole("reception");
     setPassword(generatePassword());
     setCopied(false);
   };
@@ -138,11 +139,19 @@ export function AddUserDialog() {
               id="role"
               name="role"
               value={role}
-              onChange={(e) => setRole(e.target.value as "admin" | "staff")}
+              onChange={(e) => setRole(e.target.value as UserRole)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="staff">Staff — manage bookings & guests</option>
-              <option value="admin">Admin — full access including users</option>
+              <option value="reception">
+                Reception — bookings &amp; guests only
+              </option>
+              <option value="manager">
+                Manager — operations, rooms, gallery &amp; pricing
+              </option>
+              <option value="admin">
+                Owner — full access including users
+              </option>
+              <option value="viewer">Viewer — read-only access</option>
             </select>
           </div>
 

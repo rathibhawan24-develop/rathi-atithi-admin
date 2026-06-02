@@ -1,19 +1,24 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Users as UsersIcon,
   ShieldCheck,
   UserMinus,
   Mail,
+  Eye,
+  Briefcase,
+  Headphones,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { AddUserDialog } from "./add-user-dialog";
 import { UserRowActions } from "./user-row-actions";
+import {
+  type UserRole,
+  ROLE_LABELS,
+  ROLE_DESCRIPTIONS,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -21,15 +26,29 @@ type Profile = {
   id: string;
   email: string;
   full_name: string | null;
-  role: "admin" | "staff";
+  role: UserRole;
   is_active: boolean;
   created_at: string;
+};
+
+const ROLE_ICONS: Record<UserRole, React.ComponentType<{ className?: string }>> = {
+  admin: ShieldCheck,
+  manager: Briefcase,
+  reception: Headphones,
+  viewer: Eye,
+};
+
+const ROLE_VARIANTS: Record<UserRole, "default" | "secondary" | "muted"> = {
+  admin: "default",
+  manager: "secondary",
+  reception: "secondary",
+  viewer: "muted",
 };
 
 export default async function UsersPage() {
   const supabase = createClient();
 
-  // Verify caller is admin — staff who somehow land here get bounced.
+  // Admin-only page. Anyone else gets bounced to the dashboard.
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -78,7 +97,7 @@ export default async function UsersPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              Admins
+              Owners
             </p>
             <p className="text-2xl font-semibold tabular-nums mt-1">
               {adminCount}
@@ -115,6 +134,7 @@ export default async function UsersPage() {
             <ul className="divide-y">
               {profiles.map((p) => {
                 const isSelf = p.id === user.id;
+                const RoleIcon = ROLE_ICONS[p.role] ?? ShieldCheck;
                 return (
                   <li
                     key={p.id}
@@ -130,13 +150,11 @@ export default async function UsersPage() {
                           )}
                         </p>
                         <Badge
-                          variant={p.role === "admin" ? "default" : "secondary"}
+                          variant={ROLE_VARIANTS[p.role] ?? "secondary"}
                           className="text-[10px] uppercase tracking-wider"
                         >
-                          {p.role === "admin" ? (
-                            <ShieldCheck className="h-3 w-3 mr-0.5" />
-                          ) : null}
-                          {p.role}
+                          <RoleIcon className="h-3 w-3 mr-0.5" />
+                          {ROLE_LABELS[p.role] ?? p.role}
                         </Badge>
                         {!p.is_active && (
                           <Badge
@@ -181,17 +199,25 @@ export default async function UsersPage() {
 
       <Card>
         <CardContent className="py-4 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground mb-1">About roles</p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>
-              <span className="font-medium">Admin</span> — full access including
-              this users page, settings, pricing, and all bookings.
-            </li>
-            <li>
-              <span className="font-medium">Staff</span> — manage bookings,
-              rooms, add-ons, guests, calendar. Cannot manage users or change
-              settings.
-            </li>
+          <p className="font-medium text-foreground mb-2">About the four roles</p>
+          <ul className="space-y-1.5">
+            {(["admin", "manager", "reception", "viewer"] as UserRole[]).map(
+              (r) => {
+                const Icon = ROLE_ICONS[r];
+                return (
+                  <li key={r} className="flex items-start gap-2">
+                    <Icon className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary/70" />
+                    <span>
+                      <span className="font-medium text-foreground">
+                        {ROLE_LABELS[r]}
+                      </span>
+                      {" — "}
+                      {ROLE_DESCRIPTIONS[r]}
+                    </span>
+                  </li>
+                );
+              }
+            )}
           </ul>
         </CardContent>
       </Card>

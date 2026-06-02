@@ -2,10 +2,14 @@ import { Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AddonsManager } from "./addons-manager";
 import type { Addon } from "@/lib/types";
+import { requirePermission } from "@/lib/auth/permissions";
+import { canManageContent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function AddonsPage() {
+  await requirePermission(canManageContent, "/");
+
   const supabase = createClient();
   const { data } = await supabase
     .from("addons")

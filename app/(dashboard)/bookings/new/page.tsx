@@ -3,10 +3,14 @@ import { ChevronLeft, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { WalkInForm } from "./walk-in-form";
 import type { Addon } from "@/lib/types";
+import { requirePermission } from "@/lib/auth/permissions";
+import { canManageBookings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewWalkInPage() {
+  await requirePermission(canManageBookings, "/bookings");
+
   const supabase = createClient();
   const { data: addons } = await supabase
     .from("addons")

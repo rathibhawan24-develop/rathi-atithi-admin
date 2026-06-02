@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RoomForm } from "./room-form";
 import { PhotoManager } from "./photo-manager";
 import type { Room } from "@/lib/types";
+import { requirePermission } from "@/lib/auth/permissions";
+import { canManageContent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,8 @@ export default async function RoomEditPage({
 }: {
   params: { id: string };
 }) {
+  await requirePermission(canManageContent, "/");
+
   const supabase = createClient();
   const { data: room, error } = await supabase
     .from("rooms")

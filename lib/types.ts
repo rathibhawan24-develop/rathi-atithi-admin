@@ -1,11 +1,69 @@
 // Database types matching the Supabase schema.
 // In a later phase we'll auto-generate these via `supabase gen types typescript`.
 
+// ----- Roles & permissions -------------------------------------------------
+
+export type UserRole = "admin" | "manager" | "reception" | "viewer";
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: "Owner",
+  manager: "Manager",
+  reception: "Reception",
+  viewer: "Viewer",
+};
+
+export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
+  admin: "Full access including users, settings, and deleting bookings",
+  manager: "Operations — bookings, rooms, gallery, pricing, reports",
+  reception: "Bookings, calendar, and guests only",
+  viewer: "Read-only access to data",
+};
+
+// Permission helpers — call from server components, server actions, and the
+// sidebar. Keep these in one place so role logic doesn't drift.
+
+/** Can manage user accounts (add, remove, change roles). Admin only. */
+export function canManageUsers(role: UserRole | null): boolean {
+  return role === "admin";
+}
+
+/** Can change hotel-wide settings (contact info, business rules). Admin only. */
+export function canManageSettings(role: UserRole | null): boolean {
+  return role === "admin";
+}
+
+/** Can edit rooms, photos, gallery, add-ons, pricing. Admin + Manager. */
+export function canManageContent(role: UserRole | null): boolean {
+  return role === "admin" || role === "manager";
+}
+
+/** Can create/edit bookings + payments. Admin + Manager + Reception. */
+export function canManageBookings(role: UserRole | null): boolean {
+  return role === "admin" || role === "manager" || role === "reception";
+}
+
+/** Can permanently delete a booking. Admin only — destructive action. */
+export function canDeleteBookings(role: UserRole | null): boolean {
+  return role === "admin";
+}
+
+/** Can see Reports page. Admin + Manager + Viewer (Reception doesn't need.) */
+export function canViewReports(role: UserRole | null): boolean {
+  return role === "admin" || role === "manager" || role === "viewer";
+}
+
+/** Read-only — used to disable any action button. */
+export function isReadOnly(role: UserRole | null): boolean {
+  return role === "viewer";
+}
+
+// ----- Database row types --------------------------------------------------
+
 export type Profile = {
   id: string;
   email: string;
   full_name: string | null;
-  role: "admin" | "staff";
+  role: UserRole;
   is_active: boolean;
   created_at: string;
   updated_at: string;

@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/tabs";
 import { BedDouble, Users, ImageOff } from "lucide-react";
 import type { Room } from "@/lib/types";
+import { requirePermission } from "@/lib/auth/permissions";
+import { canManageContent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +131,8 @@ function RoomGrid({ rooms }: { rooms: Room[] }) {
 }
 
 export default async function RoomsPage() {
+  await requirePermission(canManageContent, "/");
+
   const rooms = await getRooms();
   const grouped = groupByType(rooms);
 

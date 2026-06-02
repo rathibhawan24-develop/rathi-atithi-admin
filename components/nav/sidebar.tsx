@@ -21,6 +21,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import {
+  type UserRole,
+  ROLE_LABELS,
+  canManageUsers,
+  canManageSettings,
+  canManageContent,
+  canManageBookings,
+  canViewReports,
+} from "@/lib/types";
 
 type NavItem = {
   label: string;
@@ -29,33 +38,42 @@ type NavItem = {
   badge?: string;
 };
 
-const mainNav: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Bookings", href: "/bookings", icon: CalendarDays },
-  { label: "Calendar", href: "/calendar", icon: CalendarDays },
-  { label: "New Walk-in", href: "/bookings/new", icon: Plus },
-];
-
-const baseManagementNav: NavItem[] = [
-  { label: "Rooms", href: "/rooms", icon: BedDouble },
-  { label: "Add-ons", href: "/addons", icon: Sparkles },
-  { label: "Gallery", href: "/gallery", icon: Images },
-  { label: "Pricing", href: "/pricing", icon: IndianRupee },
-  { label: "Guests", href: "/guests", icon: Users },
-  { label: "Reports", href: "/reports", icon: Receipt },
-  { label: "Settings", href: "/settings", icon: Settings },
-];
-
 export function Sidebar({
   userEmail,
   userRole,
 }: {
   userEmail: string;
-  userRole: string;
+  userRole: UserRole;
 }) {
+  // Build nav lists based on the current user's role.
+  // Reception and Viewer get a slimmer "Manage" section; Admin gets Users
+  // (admin-only). Viewer can see Reports but no other content management.
+  const mainNav: NavItem[] = [
+    { label: "Dashboard", href: "/", icon: LayoutDashboard },
+    { label: "Bookings", href: "/bookings", icon: CalendarDays },
+    { label: "Calendar", href: "/calendar", icon: CalendarDays },
+    ...(canManageBookings(userRole)
+      ? [{ label: "New Walk-in", href: "/bookings/new", icon: Plus } as NavItem]
+      : []),
+  ];
+
   const managementNav: NavItem[] = [
-    ...baseManagementNav,
-    ...(userRole === "admin"
+    ...(canManageContent(userRole)
+      ? [
+          { label: "Rooms", href: "/rooms", icon: BedDouble } as NavItem,
+          { label: "Add-ons", href: "/addons", icon: Sparkles } as NavItem,
+          { label: "Gallery", href: "/gallery", icon: Images } as NavItem,
+          { label: "Pricing", href: "/pricing", icon: IndianRupee } as NavItem,
+        ]
+      : []),
+    { label: "Guests", href: "/guests", icon: Users },
+    ...(canViewReports(userRole)
+      ? [{ label: "Reports", href: "/reports", icon: Receipt } as NavItem]
+      : []),
+    ...(canManageSettings(userRole)
+      ? [{ label: "Settings", href: "/settings", icon: Settings } as NavItem]
+      : []),
+    ...(canManageUsers(userRole)
       ? [{ label: "Users", href: "/users", icon: UserCog } as NavItem]
       : []),
   ];
@@ -117,7 +135,7 @@ export function Sidebar({
     <div className="border-t border-border p-4">
       <div className="px-2 mb-3">
         <p className="text-sm font-medium truncate">{userEmail}</p>
-        <p className="text-xs text-muted-foreground capitalize">{userRole}</p>
+        <p className="text-xs text-muted-foreground">{ROLE_LABELS[userRole]}</p>
       </div>
       <button
         type="button"

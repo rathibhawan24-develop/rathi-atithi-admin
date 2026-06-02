@@ -28,6 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import type { PaymentMode } from "@/lib/types";
+import { requirePermission } from "@/lib/auth/permissions";
+import { canViewReports } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +68,8 @@ export default async function ReportsPage({
 }: {
   searchParams: SearchParams;
 }) {
+  await requirePermission(canViewReports, "/");
+
   const supabase = createClient();
   const dailyDate = parseDateParam(searchParams.date);
   const monthStr = parseMonthParam(searchParams.month);

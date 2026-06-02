@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { ROOM_PHOTOS_BUCKET } from "@/lib/storage";
 import { z } from "zod";
+import { checkPermission } from "@/lib/auth/permissions";
+import { canManageContent } from "@/lib/types";
 
 const RoomUpdateSchema = z.object({
   id: z.string().uuid(),
@@ -24,6 +26,11 @@ export type RoomUpdateInput = z.infer<typeof RoomUpdateSchema>;
 type ActionResult = { success: true } | { success: false; error: string };
 
 export async function updateRoom(input: RoomUpdateInput): Promise<ActionResult> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { success: false, error: _perm.error };
+  }
+
   const parsed = RoomUpdateSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -78,6 +85,11 @@ export async function addRoomPhotos(
   roomId: string,
   paths: string[]
 ): Promise<ActionResult> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { success: false, error: _perm.error };
+  }
+
   if (paths.length === 0) return { success: true };
 
   const supabase = createClient();
@@ -120,6 +132,11 @@ export async function deleteRoomPhoto(
   roomId: string,
   photoPath: string
 ): Promise<ActionResult> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { success: false, error: _perm.error };
+  }
+
   const supabase = createClient();
   const {
     data: { user },
@@ -163,6 +180,11 @@ export async function reorderRoomPhotos(
   roomId: string,
   orderedPaths: string[]
 ): Promise<ActionResult> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { success: false, error: _perm.error };
+  }
+
   const supabase = createClient();
   const {
     data: { user },

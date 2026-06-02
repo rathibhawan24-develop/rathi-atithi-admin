@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { checkPermission } from "@/lib/auth/permissions";
+import { canManageSettings } from "@/lib/types";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -28,6 +30,11 @@ async function requireAdmin() {
 export async function updateSettings(
   updates: Record<string, unknown>
 ): Promise<ActionResult> {
+  {
+    const _perm = await checkPermission(canManageSettings, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { success: false, error: _perm.error };
+  }
+
   const auth = await requireAdmin();
   if (auth.error) return { success: false, error: auth.error };
 

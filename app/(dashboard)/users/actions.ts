@@ -36,7 +36,7 @@ export async function createUserAction(
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("full_name") ?? "").trim();
-  const role = String(formData.get("role") ?? "staff");
+  const role = String(formData.get("role") ?? "reception");
 
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
     return { ok: false, error: "Enter a valid email address." };
@@ -44,8 +44,8 @@ export async function createUserAction(
   if (password.length < 8) {
     return { ok: false, error: "Password must be at least 8 characters." };
   }
-  if (role !== "admin" && role !== "staff") {
-    return { ok: false, error: "Role must be admin or staff." };
+  if (!["admin", "manager", "reception", "viewer"].includes(role)) {
+    return { ok: false, error: "Role must be one of: admin, manager, reception, viewer." };
   }
 
   let admin;
@@ -106,8 +106,8 @@ export async function updateUserRoleAction(
       error: "You cannot demote yourself. Ask another admin to do it.",
     };
   }
-  if (role !== "admin" && role !== "staff") {
-    return { ok: false, error: "Role must be admin or staff." };
+  if (!["admin", "manager", "reception", "viewer"].includes(role)) {
+    return { ok: false, error: "Role must be one of: admin, manager, reception, viewer." };
   }
   const admin = createAdminClient();
   const { error } = await admin

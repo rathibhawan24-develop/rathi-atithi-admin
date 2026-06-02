@@ -38,6 +38,7 @@ import {
   toggleUserActiveAction,
   resetUserPasswordAction,
 } from "./actions";
+import { type UserRole, ROLE_LABELS } from "@/lib/types";
 
 function generatePassword(): string {
   const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -58,7 +59,7 @@ export function UserRowActions({
 }: {
   userId: string;
   email: string;
-  role: "admin" | "staff";
+  role: UserRole;
   isActive: boolean;
   isSelf: boolean;
 }) {
@@ -68,15 +69,15 @@ export function UserRowActions({
   const [toggleOpen, setToggleOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
 
-  const handleRoleChange = () => {
-    const newRole = role === "admin" ? "staff" : "admin";
+  const handleRoleChange = (newRole: UserRole) => {
+    if (newRole === role) return;
     startTransition(async () => {
       const result = await updateUserRoleAction(userId, newRole);
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      toast.success(`${email} is now ${newRole}.`);
+      toast.success(`${email} is now ${ROLE_LABELS[newRole]}.`);
       router.refresh();
     });
   };
@@ -119,22 +120,18 @@ export function UserRowActions({
     <>
       <div className="flex flex-wrap items-center gap-2">
         {!isSelf && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRoleChange}
+          <select
+            value={role}
+            onChange={(e) => handleRoleChange(e.target.value as UserRole)}
             disabled={isPending}
-            title={role === "admin" ? "Demote to staff" : "Promote to admin"}
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Change role"
           >
-            {role === "admin" ? (
-              <ShieldOff className="h-3.5 w-3.5" />
-            ) : (
-              <ShieldCheck className="h-3.5 w-3.5" />
-            )}
-            <span className="hidden sm:inline">
-              Make {role === "admin" ? "staff" : "admin"}
-            </span>
-          </Button>
+            <option value="reception">Reception</option>
+            <option value="manager">Manager</option>
+            <option value="admin">Owner</option>
+            <option value="viewer">Viewer</option>
+          </select>
         )}
         <Button
           variant="outline"

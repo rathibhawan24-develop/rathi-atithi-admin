@@ -1,10 +1,14 @@
 import { Settings as SettingsIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { SettingsForm } from "./settings-form";
+import { requirePermission } from "@/lib/auth/permissions";
+import { canManageSettings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  await requirePermission(canManageSettings, "/");
+
   const supabase = createClient();
   const { data } = await supabase.from("settings").select("key, value");
 

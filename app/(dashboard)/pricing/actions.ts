@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { checkPermission } from "@/lib/auth/permissions";
+import { canManageContent } from "@/lib/types";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -79,6 +81,11 @@ function toRow(input: OverrideInput) {
 export async function createOverride(
   input: OverrideInput
 ): Promise<ActionResult> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { success: false, error: _perm.error };
+  }
+
   const parsed = OverrideSchema.safeParse(input);
   if (!parsed.success)
     return {
@@ -101,6 +108,11 @@ export async function updateOverride(
   id: string,
   input: OverrideInput
 ): Promise<ActionResult> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { success: false, error: _perm.error };
+  }
+
   const parsed = OverrideSchema.safeParse(input);
   if (!parsed.success)
     return {
@@ -121,6 +133,11 @@ export async function updateOverride(
 }
 
 export async function deleteOverride(id: string): Promise<ActionResult> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { success: false, error: _perm.error };
+  }
+
   const auth = await requireAdmin();
   if (auth.error) return { success: false, error: auth.error };
 

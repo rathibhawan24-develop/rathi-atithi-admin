@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { GALLERY_PHOTOS_BUCKET } from "@/lib/storage";
+import { checkPermission } from "@/lib/auth/permissions";
+import { canManageContent } from "@/lib/types";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -30,6 +32,11 @@ async function requireStaff(): Promise<{ userId: string } | { error: string }> {
 export async function addGalleryPhotos(
   storagePaths: string[]
 ): Promise<Result> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { ok: false, error: _perm.error };
+  }
+
   const auth = await requireStaff();
   if ("error" in auth) return { ok: false, error: auth.error };
 
@@ -60,6 +67,11 @@ export async function addGalleryPhotos(
 }
 
 export async function deleteGalleryPhoto(id: string): Promise<Result> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { ok: false, error: _perm.error };
+  }
+
   const auth = await requireStaff();
   if ("error" in auth) return { ok: false, error: auth.error };
 
@@ -95,6 +107,11 @@ export async function updateGalleryCaption(
   id: string,
   caption: string
 ): Promise<Result> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { ok: false, error: _perm.error };
+  }
+
   const auth = await requireStaff();
   if ("error" in auth) return { ok: false, error: auth.error };
 
@@ -110,6 +127,11 @@ export async function updateGalleryCaption(
 }
 
 export async function toggleGalleryActive(id: string): Promise<Result> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { ok: false, error: _perm.error };
+  }
+
   const auth = await requireStaff();
   if ("error" in auth) return { ok: false, error: auth.error };
 
@@ -135,6 +157,11 @@ export async function reorderGalleryPhoto(
   id: string,
   direction: "up" | "down"
 ): Promise<Result> {
+  {
+    const _perm = await checkPermission(canManageContent, "Only owners and managers can perform this action.");
+    if (!_perm.ok) return { ok: false, error: _perm.error };
+  }
+
   const auth = await requireStaff();
   if ("error" in auth) return { ok: false, error: auth.error };
 

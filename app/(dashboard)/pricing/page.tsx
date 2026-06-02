@@ -1,10 +1,14 @@
 import { TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { PricingManager } from "./pricing-manager";
+import { requirePermission } from "@/lib/auth/permissions";
+import { canManageContent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function PricingPage() {
+  await requirePermission(canManageContent, "/");
+
   const supabase = createClient();
 
   const [overridesRes, roomsRes] = await Promise.all([
