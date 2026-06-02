@@ -3,7 +3,7 @@
 // render it correctly. Layout uses tables (not flexbox) for the same reason.
 // Designed to match the customer site's cream + amber + Fraunces aesthetic.
 
-export type EmailStage = "received" | "confirmed" | "checked_in" | "checked_out";
+export type EmailStage = "received" | "confirmed" | "checked_in" | "checked_out" | "cancelled";
 
 export type BookingForEmail = {
   booking_code: string;
@@ -396,6 +396,47 @@ export function emailCheckedOut(booking: BookingForEmail): { subject: string; ht
   };
 }
 
+export function emailCancelled(booking: BookingForEmail): { subject: string; html: string } {
+  // Cancellation: keep it warm and non-judgmental. Show the original booking
+  // details so guests have a record. Mention refund handling if money was paid.
+  const html = renderShell({
+    preheader: `Your booking ${booking.booking_code} has been cancelled.`,
+    greeting: `Dear ${booking.guest_name},`,
+    bodyHtml: `
+      <p style="margin:0 0 12px;color:${BRAND.text};font-family:${FONT_SANS};font-size:15px;line-height:1.65;">
+        This is to confirm that your booking with <strong style="color:${BRAND.primaryDeep};">Rathi Atithi Bhawan</strong> has been cancelled. Please keep this email for your records.
+      </p>
+      ${
+        booking.paid_amount > 0
+          ? `<p style="margin:0 0 12px;color:${BRAND.text};font-family:${FONT_SANS};font-size:15px;line-height:1.65;">
+              Regarding the amount of <strong>${fmtCurrency(booking.paid_amount)}</strong> already paid — our team will be in touch shortly to arrange the refund as per our cancellation policy. If you'd like to speak about it directly, simply reply to this email.
+            </p>`
+          : ""
+      }
+      <p style="margin:0;color:${BRAND.text};font-family:${FONT_SANS};font-size:15px;line-height:1.65;">
+        Cancelled booking details, for reference:
+      </p>
+    `,
+    booking,
+    showAmounts: booking.paid_amount > 0,
+    closingHtml: `
+      <p style="margin:18px 0 0;color:${BRAND.text};font-family:${FONT_SANS};font-size:15px;line-height:1.6;">
+        We're sorry your plans had to change. If you'd like to visit Vrindavan another time — at any season — our doors will always be open to you. Just call or write whenever you're ready.
+      </p>
+      <p style="margin:16px 0 0;color:${BRAND.muted};font-family:${FONT_SERIF};font-style:italic;font-size:14px;">
+        With folded hands,<br>The Rathi Atithi Bhawan family
+      </p>
+      <p style="margin:12px 0 0;color:${BRAND.primary};font-family:${FONT_SERIF};font-style:italic;font-size:13px;letter-spacing:1px;">
+        राधे राधे
+      </p>
+    `,
+  });
+  return {
+    subject: `Booking cancelled — ${booking.booking_code} · Rathi Atithi Bhawan`,
+    html,
+  };
+}
+
 // ============================== Dispatcher ==============================
 
 export function renderEmail(
@@ -411,5 +452,7 @@ export function renderEmail(
       return emailCheckedIn(booking);
     case "checked_out":
       return emailCheckedOut(booking);
+    case "cancelled":
+      return emailCancelled(booking);
   }
 }

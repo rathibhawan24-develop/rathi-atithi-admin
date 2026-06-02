@@ -30,6 +30,7 @@ const VALID_STAGES: EmailStage[] = [
   "confirmed",
   "checked_in",
   "checked_out",
+  "cancelled",
 ];
 
 function corsHeaders(origin: string | null): Record<string, string> {

@@ -91,7 +91,9 @@ export async function updateBookingStatus(
         ? "checked_in"
         : newStatus === "checked_out"
           ? "checked_out"
-          : null;
+          : newStatus === "cancelled"
+            ? "cancelled"
+            : null;
   if (emailStage) {
     try {
       const r = await sendBookingEmail(bookingId, emailStage);
