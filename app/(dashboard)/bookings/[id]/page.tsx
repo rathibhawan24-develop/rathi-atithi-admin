@@ -65,6 +65,7 @@ type BookingRow = {
   id_proof_type: string | null;
   id_proof_number: string | null;
   id_proof_url: string | null;
+  id_proof_urls: string[] | null;
   check_in: string;
   check_out: string;
   nights: number;
@@ -437,7 +438,12 @@ export default async function BookingDetailPage({
                 initial={{
                   type: booking.id_proof_type,
                   number: booking.id_proof_number,
-                  url: booking.id_proof_url,
+                  urls:
+                    booking.id_proof_urls && booking.id_proof_urls.length > 0
+                      ? booking.id_proof_urls
+                      : booking.id_proof_url
+                      ? [booking.id_proof_url]
+                      : [],
                 }}
               />
             </CardContent>

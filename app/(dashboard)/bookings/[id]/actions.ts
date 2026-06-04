@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { sendBookingEmail } from "@/lib/send-booking-email";
+import { sendBookingWhatsapp } from "@/lib/send-booking-whatsapp";
 import type { EmailStage } from "@/lib/email-templates";
 import type { BookingStatus } from "@/lib/types";
 
@@ -104,6 +105,16 @@ export async function updateBookingStatus(
       }
     } catch (e) {
       console.warn(`[updateBookingStatus] email send threw:`, e);
+    }
+    try {
+      const w = await sendBookingWhatsapp(bookingId, emailStage);
+      if (!w.ok) {
+        console.warn(
+          `[updateBookingStatus] whatsapp send failed: ${w.error}`
+        );
+      }
+    } catch (e) {
+      console.warn(`[updateBookingStatus] whatsapp send threw:`, e);
     }
   }
 
@@ -239,6 +250,7 @@ const IdProofSchema = z.object({
   ]),
   id_proof_number: z.string().min(1),
   id_proof_url: z.string().optional(),
+  id_proof_urls: z.array(z.string()).max(5, "Maximum 5 ID proof files").optional(),
 });
 
 export type IdProofInput = z.infer<typeof IdProofSchema>;
@@ -258,7 +270,15 @@ export async function updateIdProof(
   if (!auth.user || !auth.supabase)
     return { success: false, error: auth.error ?? "Auth required" };
 
-  const { booking_id, ...updates } = parsed.data;
+  const { booking_id, ...rest } = parsed.data;
+  // Keep the legacy id_proof_url column in sync with the first item of the
+  // array, so any external consumers that still read the single column
+  // continue to see *a* file.
+  const updates: Record<string, unknown> = { ...rest };
+  if (Array.isArray(rest.id_proof_urls)) {
+    updates.id_proof_urls = rest.id_proof_urls;
+    updates.id_proof_url = rest.id_proof_urls[0] ?? null;
+  }
   const { error } = await auth.supabase
     .from("bookings")
     .update(updates)
