@@ -67,6 +67,15 @@ async function getDashboardStats() {
   };
 }
 
+
+const WEEKDAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MONTHS_LONG = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function formatTodayLong(): string {
+  const d = new Date();
+  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS_LONG[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 export default async function DashboardPage() {
   const stats = await getDashboardStats();
 
@@ -116,13 +125,7 @@ export default async function DashboardPage() {
             Dashboard
           </h1>
           <p className="text-muted-foreground mt-1">
-            Today at a glance —{" "}
-            {new Date().toLocaleDateString("en-IN", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
+            Today at a glance — {formatTodayLong()}
           </p>
         </div>
         <SyncStatus />
