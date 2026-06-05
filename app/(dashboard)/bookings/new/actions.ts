@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { sendBookingEmail } from "@/lib/send-booking-email";
+import { sendBookingWhatsapp } from "@/lib/send-booking-whatsapp";
 
 const RoomSelectionSchema = z.object({
   room_id: z.string().uuid(),
@@ -25,7 +27,15 @@ const PaymentSchema = z.object({
 const WalkInBookingSchema = z.object({
   guest_name: z.string().min(1, "Guest name is required").max(100),
   phone: z.string().min(7, "Valid phone number required"),
-  email: z.string().email("Valid email required"),
+  email: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((v) => (v ?? "").trim())
+    .refine(
+      (v) => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+      "Email is invalid"
+    ),
   address: z.string().optional(),
   check_in: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid check-in date"),
   check_out: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid check-out date"),
@@ -66,7 +76,7 @@ export async function createWalkInBooking(
   const { data, error } = await supabase.rpc("create_walk_in_booking", {
     p_guest_name: parsed.data.guest_name,
     p_phone: parsed.data.phone,
-    p_email: parsed.data.email,
+    p_email: parsed.data.email || null,
     p_address: parsed.data.address ?? null,
     p_check_in: parsed.data.check_in,
     p_check_out: parsed.data.check_out,
@@ -88,6 +98,29 @@ export async function createWalkInBooking(
 
   revalidatePath("/bookings");
   revalidatePath("/");
+
+  // Fire confirmed-stage email + WhatsApp. Walk-ins skip `pending` entirely
+  // and are created with status `confirmed`, so the guest gets one clean
+  // notification confirming their booking with all details (booking code,
+  // dates, guests). Failures are logged but don't fail the request — the
+  // booking row is already created and visible to staff.
+  try {
+    const r = await sendBookingEmail(row.booking_id, "confirmed");
+    if (!r.ok) {
+      console.warn(`[walk-in] email send failed: ${r.error}`);
+    }
+  } catch (e) {
+    console.warn(`[walk-in] email send threw:`, e);
+  }
+  try {
+    const w = await sendBookingWhatsapp(row.booking_id, "confirmed");
+    if (!w.ok) {
+      console.warn(`[walk-in] whatsapp send failed: ${w.error}`);
+    }
+  } catch (e) {
+    console.warn(`[walk-in] whatsapp send threw:`, e);
+  }
+
   return {
     success: true,
     booking_id: row.booking_id,

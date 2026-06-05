@@ -303,14 +303,13 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email *</Label>
+            <Label htmlFor="email">Email (optional)</Label>
             <Input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="guest@example.com"
-              required
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
