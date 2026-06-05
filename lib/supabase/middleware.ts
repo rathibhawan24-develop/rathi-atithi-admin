@@ -48,6 +48,7 @@ export async function updateSession(request: NextRequest) {
     // Public booking-email endpoint — called by the customer site without
     // admin login. CORS preflight (OPTIONS) must also pass through.
     pathname.startsWith("/api/send-booking-email") ||
+    pathname.startsWith("/api/send-booking-whatsapp") ||
     pathname === "/favicon.ico";
 
   // Not logged in and trying to access protected route → redirect to login
