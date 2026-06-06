@@ -26,6 +26,7 @@ import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { BookingActionsBar } from "./booking-actions-bar";
 import { PaymentLedger } from "./payment-ledger";
 import { GuestEditButton } from "./guest-edit-form";
+import { StayEditButton } from "./stay-edit-form";
 import { IdProofSection } from "./id-proof-section";
 import { InternalNotesEditor } from "./internal-notes";
 import type { BookingStatus, PaymentMode } from "@/lib/types";
@@ -90,7 +91,7 @@ type BookingRow = {
     nights: number;
     guests: number;
     subtotal: number | string;
-    room: { room_number: string; name: string; room_type: string };
+    room: { room_number: string; name: string; room_type: string; max_occupancy: number };
     booking_room_addons: Array<{
       id: string;
       quantity: number;
@@ -137,7 +138,7 @@ export default async function BookingDetailPage({
       *,
       booking_rooms (
         id, rate_per_night, nights, guests, subtotal,
-        room:rooms ( room_number, name, room_type ),
+        room:rooms ( room_number, name, room_type, max_occupancy ),
         booking_room_addons (
           id, quantity, unit_price, total_charge,
           addon:addons ( name, is_per_night )
@@ -237,10 +238,28 @@ export default async function BookingDetailPage({
           {/* Stay */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-primary" />
-                Stay
-              </CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  Stay
+                </CardTitle>
+                <StayEditButton
+                  bookingId={booking.id}
+                  initial={{
+                    check_in: booking.check_in,
+                    check_out: booking.check_out,
+                    special_requests: booking.special_requests ?? null,
+                    status: booking.status,
+                  }}
+                  rooms={booking.booking_rooms.map((br) => ({
+                    booking_room_id: br.id,
+                    room_number: br.room?.room_number ?? "",
+                    room_label: br.room?.room_type ?? "",
+                    current_guests: br.guests,
+                    max_occupancy: br.room?.max_occupancy ?? br.guests,
+                  }))}
+                />
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-3 gap-3 text-sm">

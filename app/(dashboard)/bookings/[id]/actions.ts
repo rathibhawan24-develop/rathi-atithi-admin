@@ -328,3 +328,57 @@ export async function getIdProofSignedUrl(
   if (error) return { url: null, error: error.message };
   return { url: data?.signedUrl ?? null, error: null };
 }
+
+
+// =============================================================================
+// Edit booking stay — dates, special requests, per-room guest counts
+// =============================================================================
+
+const RoomGuestsItem = z.object({
+  booking_room_id: z.string().uuid(),
+  guests: z.number().int().min(1),
+});
+
+const UpdateBookingStaySchema = z.object({
+  booking_id: z.string().uuid(),
+  check_in: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid check-in date"),
+  check_out: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid check-out date"),
+  special_requests: z.string().nullable().optional(),
+  room_guests: z.array(RoomGuestsItem).default([]),
+});
+
+export type UpdateBookingStayInput = z.infer<typeof UpdateBookingStaySchema>;
+
+export async function updateBookingStay(
+  input: UpdateBookingStayInput
+): Promise<ActionResult> {
+  const parsed = UpdateBookingStaySchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  if (parsed.data.check_out <= parsed.data.check_in) {
+    return { success: false, error: "Check-out must be after check-in" };
+  }
+
+  const { error } = await auth.supabase.rpc("update_booking_stay", {
+    p_booking_id: parsed.data.booking_id,
+    p_check_in: parsed.data.check_in,
+    p_check_out: parsed.data.check_out,
+    p_special_requests: parsed.data.special_requests ?? null,
+    p_room_guests: parsed.data.room_guests,
+  });
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/bookings/${parsed.data.booking_id}`);
+  revalidatePath(`/bookings`);
+  return { success: true };
+}
