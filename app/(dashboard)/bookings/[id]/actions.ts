@@ -382,3 +382,51 @@ export async function updateBookingStay(
   revalidatePath(`/bookings`);
   return { success: true };
 }
+
+
+// =============================================================================
+// Edit a single room inside a booking — guests + add-ons
+// =============================================================================
+
+const AddonItem = z.object({
+  addon_id: z.string().uuid(),
+  quantity: z.number().int().min(1),
+});
+
+const UpdateBookingRoomSchema = z.object({
+  booking_id: z.string().uuid(),
+  booking_room_id: z.string().uuid(),
+  guests: z.number().int().min(1),
+  addons: z.array(AddonItem).default([]),
+});
+
+export type UpdateBookingRoomInput = z.infer<typeof UpdateBookingRoomSchema>;
+
+export async function updateBookingRoom(
+  input: UpdateBookingRoomInput
+): Promise<ActionResult> {
+  const parsed = UpdateBookingRoomSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  const { error } = await auth.supabase.rpc("update_booking_room", {
+    p_booking_id: parsed.data.booking_id,
+    p_booking_room_id: parsed.data.booking_room_id,
+    p_guests: parsed.data.guests,
+    p_addons: parsed.data.addons,
+  });
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/bookings/${parsed.data.booking_id}`);
+  revalidatePath(`/bookings`);
+  return { success: true };
+}

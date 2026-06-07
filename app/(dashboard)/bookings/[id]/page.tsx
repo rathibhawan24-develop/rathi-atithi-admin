@@ -27,6 +27,7 @@ import { BookingActionsBar } from "./booking-actions-bar";
 import { PaymentLedger } from "./payment-ledger";
 import { GuestEditButton } from "./guest-edit-form";
 import { StayEditButton } from "./stay-edit-form";
+import { RoomEditButton } from "./room-edit-form";
 import { IdProofSection } from "./id-proof-section";
 import { InternalNotesEditor } from "./internal-notes";
 import type { BookingStatus, PaymentMode } from "@/lib/types";
@@ -94,10 +95,11 @@ type BookingRow = {
     room: { room_number: string; name: string; room_type: string; max_occupancy: number };
     booking_room_addons: Array<{
       id: string;
+      addon_id: string;
       quantity: number;
       unit_price: number | string;
       total_charge: number | string;
-      addon: { name: string; is_per_night: boolean };
+      addon: { id: string; name: string; is_per_night: boolean };
     }>;
   }>;
   payments: Array<{
@@ -140,8 +142,8 @@ export default async function BookingDetailPage({
         id, rate_per_night, nights, guests, subtotal,
         room:rooms ( room_number, name, room_type, max_occupancy ),
         booking_room_addons (
-          id, quantity, unit_price, total_charge,
-          addon:addons ( name, is_per_night )
+          id, addon_id, quantity, unit_price, total_charge,
+          addon:addons ( id, name, is_per_night )
         )
       ),
       payments ( id, amount, mode, reference_number, notes, paid_at, created_at )
@@ -153,6 +155,21 @@ export default async function BookingDetailPage({
   if (error || !data) {
     notFound();
   }
+
+  // Fetch all active add-ons so the per-room edit dialog can show every option
+  const { data: allAddons } = await supabase
+    .from("addons")
+    .select("id, name, description, price, is_per_night, max_per_room")
+    .eq("is_active", true)
+    .order("display_order", { ascending: true });
+  const availableAddons = (allAddons ?? []).map((a) => ({
+    id: a.id as string,
+    name: a.name as string,
+    description: (a.description ?? null) as string | null,
+    price: Number(a.price),
+    is_per_night: Boolean(a.is_per_night),
+    max_per_room: Number(a.max_per_room),
+  }));
 
   const booking = data as unknown as BookingRow;
 
@@ -313,7 +330,7 @@ export default async function BookingDetailPage({
               {booking.booking_rooms.map((br) => (
                 <div key={br.id} className="rounded-md border border-border p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-medium text-sm">
                         #{br.room.room_number} · {br.room.name}
                       </p>
@@ -322,13 +339,30 @@ export default async function BookingDetailPage({
                         {br.guests === 1 ? "" : "s"}
                       </p>
                     </div>
-                    <div className="text-right text-sm tabular-nums">
-                      <p className="font-medium">
-                        {formatCurrency(Number(br.subtotal))}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatCurrency(Number(br.rate_per_night))} × {br.nights}
-                      </p>
+                    <div className="flex items-start gap-2 shrink-0">
+                      <div className="text-right text-sm tabular-nums">
+                        <p className="font-medium">
+                          {formatCurrency(Number(br.subtotal))}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(Number(br.rate_per_night))} × {br.nights}
+                        </p>
+                      </div>
+                      <RoomEditButton
+                        bookingId={booking.id}
+                        bookingStatus={booking.status}
+                        bookingRoomId={br.id}
+                        roomNumber={br.room.room_number}
+                        roomLabel={br.room.name}
+                        maxOccupancy={br.room.max_occupancy}
+                        nights={br.nights}
+                        currentGuests={br.guests}
+                        currentAddons={br.booking_room_addons.map((a) => ({
+                          addon_id: a.addon_id,
+                          quantity: a.quantity,
+                        }))}
+                        availableAddons={availableAddons}
+                      />
                     </div>
                   </div>
                   {br.booking_room_addons.length > 0 && (
