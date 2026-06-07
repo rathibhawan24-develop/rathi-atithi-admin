@@ -28,6 +28,9 @@ import { PaymentLedger } from "./payment-ledger";
 import { GuestEditButton } from "./guest-edit-form";
 import { StayEditButton } from "./stay-edit-form";
 import { RoomEditButton } from "./room-edit-form";
+import { RoomSwapButton, type RoomOption } from "./room-swap-form";
+import { RoomRemoveButton } from "./room-remove-button";
+import { AddRoomButton } from "./add-room-form";
 import { IdProofSection } from "./id-proof-section";
 import { InternalNotesEditor } from "./internal-notes";
 import type { BookingStatus, PaymentMode } from "@/lib/types";
@@ -92,7 +95,7 @@ type BookingRow = {
     nights: number;
     guests: number;
     subtotal: number | string;
-    room: { room_number: string; name: string; room_type: string; max_occupancy: number };
+    room: { id?: string; room_number: string; name: string; room_type: string; max_occupancy: number };
     booking_room_addons: Array<{
       id: string;
       addon_id: string;
@@ -140,7 +143,7 @@ export default async function BookingDetailPage({
       *,
       booking_rooms (
         id, rate_per_night, nights, guests, subtotal,
-        room:rooms ( room_number, name, room_type, max_occupancy ),
+        room:rooms ( id, room_number, name, room_type, max_occupancy ),
         booking_room_addons (
           id, addon_id, quantity, unit_price, total_charge,
           addon:addons ( id, name, is_per_night )
@@ -169,6 +172,34 @@ export default async function BookingDetailPage({
     price: Number(a.price),
     is_per_night: Boolean(a.is_per_night),
     max_per_room: Number(a.max_per_room),
+  }));
+
+  // Fetch all active rooms with availability flags for this booking's dates,
+  // used by the Add Room and Swap Room pickers.
+  const { data: roomsAvail } = await supabase.rpc(
+    "get_rooms_with_availability",
+    {
+      p_check_in: (data as { check_in: string }).check_in,
+      p_check_out: (data as { check_out: string }).check_out,
+      p_exclude_booking_id: (data as { id: string }).id,
+    }
+  );
+  const availableRooms: RoomOption[] = (roomsAvail ?? []).map((r: {
+    id: string;
+    room_number: string;
+    name: string;
+    room_type: string;
+    base_price: number | string;
+    max_occupancy: number;
+    is_available: boolean;
+  }) => ({
+    id: r.id,
+    room_number: r.room_number,
+    name: r.name,
+    room_type: r.room_type,
+    base_price: Number(r.base_price),
+    max_occupancy: r.max_occupancy,
+    is_available: Boolean(r.is_available),
   }));
 
   const booking = data as unknown as BookingRow;
@@ -321,10 +352,22 @@ export default async function BookingDetailPage({
           {/* Rooms */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <BedDouble className="h-4 w-4 text-primary" />
-                Rooms ({booking.booking_rooms.length})
-              </CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BedDouble className="h-4 w-4 text-primary" />
+                  Rooms ({booking.booking_rooms.length})
+                </CardTitle>
+                <AddRoomButton
+                  bookingId={booking.id}
+                  bookingStatus={booking.status}
+                  nights={booking.nights}
+                  alreadyBookedRoomIds={booking.booking_rooms.map(
+                    (br) => br.room.id ?? ""
+                  )}
+                  availableRooms={availableRooms}
+                  availableAddons={availableAddons}
+                />
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {booking.booking_rooms.map((br) => (
@@ -348,21 +391,40 @@ export default async function BookingDetailPage({
                           {formatCurrency(Number(br.rate_per_night))} × {br.nights}
                         </p>
                       </div>
-                      <RoomEditButton
-                        bookingId={booking.id}
-                        bookingStatus={booking.status}
-                        bookingRoomId={br.id}
-                        roomNumber={br.room.room_number}
-                        roomLabel={br.room.name}
-                        maxOccupancy={br.room.max_occupancy}
-                        nights={br.nights}
-                        currentGuests={br.guests}
-                        currentAddons={br.booking_room_addons.map((a) => ({
-                          addon_id: a.addon_id,
-                          quantity: a.quantity,
-                        }))}
-                        availableAddons={availableAddons}
-                      />
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <RoomEditButton
+                          bookingId={booking.id}
+                          bookingStatus={booking.status}
+                          bookingRoomId={br.id}
+                          roomNumber={br.room.room_number}
+                          roomLabel={br.room.name}
+                          maxOccupancy={br.room.max_occupancy}
+                          nights={br.nights}
+                          currentGuests={br.guests}
+                          currentRate={Number(br.rate_per_night)}
+                          currentAddons={br.booking_room_addons.map((a) => ({
+                            addon_id: a.addon_id,
+                            quantity: a.quantity,
+                          }))}
+                          availableAddons={availableAddons}
+                        />
+                        <RoomSwapButton
+                          bookingId={booking.id}
+                          bookingStatus={booking.status}
+                          bookingRoomId={br.id}
+                          currentRoomId={br.room.id ?? ""}
+                          currentRoomLabel={`#${br.room.room_number} · ${br.room.name}`}
+                          currentGuests={br.guests}
+                          availableRooms={availableRooms}
+                        />
+                        <RoomRemoveButton
+                          bookingId={booking.id}
+                          bookingStatus={booking.status}
+                          bookingRoomId={br.id}
+                          roomLabel={`#${br.room.room_number} · ${br.room.name}`}
+                          totalRoomsInBooking={booking.booking_rooms.length}
+                        />
+                      </div>
                     </div>
                   </div>
                   {br.booking_room_addons.length > 0 && (

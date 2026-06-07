@@ -17,7 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/utils";
-import { updateBookingRoom } from "./actions";
+import { updateBookingRoom, updateBookingRoomRate } from "./actions";
 
 export type AvailableAddon = {
   id: string;
@@ -37,6 +37,7 @@ type Props = {
   maxOccupancy: number;
   nights: number;
   currentGuests: number;
+  currentRate: number;
   currentAddons: { addon_id: string; quantity: number }[];
   availableAddons: AvailableAddon[];
 };
@@ -50,6 +51,7 @@ export function RoomEditButton({
   maxOccupancy,
   nights,
   currentGuests,
+  currentRate,
   currentAddons,
   availableAddons,
 }: Props) {
@@ -58,6 +60,7 @@ export function RoomEditButton({
   const [isPending, startTransition] = useTransition();
 
   const [guests, setGuests] = useState(currentGuests);
+  const [rate, setRate] = useState(currentRate);
   const [quantities, setQuantities] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {};
     for (const a of availableAddons) {
@@ -67,7 +70,6 @@ export function RoomEditButton({
     return initial;
   });
 
-  // Live total preview for the selected add-ons
   const addonsTotal = useMemo(() => {
     let sum = 0;
     for (const a of availableAddons) {
@@ -78,10 +80,13 @@ export function RoomEditButton({
     return sum;
   }, [quantities, availableAddons, nights]);
 
+  const newRoomSubtotal = rate * nights;
+
   const validate = (): string | null => {
     if (guests < 1) return "Guests must be at least 1";
     if (guests > maxOccupancy)
       return `Maximum ${maxOccupancy} guests for this room`;
+    if (rate < 0) return "Rate cannot be negative";
     for (const a of availableAddons) {
       const qty = quantities[a.id] ?? 0;
       if (qty < 0) return `Invalid quantity for ${a.name}`;
@@ -98,29 +103,41 @@ export function RoomEditButton({
       toast.error(err);
       return;
     }
-
     const payload = Object.entries(quantities)
       .filter(([, q]) => q > 0)
       .map(([addon_id, quantity]) => ({ addon_id, quantity }));
 
     startTransition(async () => {
-      const result = await updateBookingRoom({
+      // Always update guests + addons
+      const r1 = await updateBookingRoom({
         booking_id: bookingId,
         booking_room_id: bookingRoomId,
         guests,
         addons: payload,
       });
-      if (result.success) {
-        toast.success("Room updated.");
-        setOpen(false);
-        router.refresh();
-      } else {
-        toast.error(result.error ?? "Could not update room.");
+      if (!r1.success) {
+        toast.error(r1.error ?? "Could not update room.");
+        return;
       }
+      // Update rate only if it changed
+      if (rate !== currentRate) {
+        const r2 = await updateBookingRoomRate({
+          booking_id: bookingId,
+          booking_room_id: bookingRoomId,
+          rate_per_night: rate,
+        });
+        if (!r2.success) {
+          toast.error(`Saved details but rate update failed: ${r2.error}`);
+          router.refresh();
+          return;
+        }
+      }
+      toast.success("Room updated.");
+      setOpen(false);
+      router.refresh();
     });
   };
 
-  // Hide button on checked-out and cancelled bookings (historical, immutable)
   if (bookingStatus === "checked_out" || bookingStatus === "cancelled") {
     return null;
   }
@@ -145,33 +162,50 @@ export function RoomEditButton({
             #{roomNumber} · {roomLabel}
           </DialogTitle>
           <DialogDescription>
-            Update guests and add-ons for this room. Billing recalculates
-            automatically.
+            Update guests, rate, and add-ons. Billing recalculates automatically.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Guests */}
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="re_guests" className="text-sm">
-              Guests in this room
-            </Label>
-            <Input
-              id="re_guests"
-              type="number"
-              min={1}
-              max={maxOccupancy}
-              value={guests}
-              onChange={(e) => setGuests(parseInt(e.target.value, 10) || 1)}
-              disabled={isPending}
-              className="w-24 h-9 text-sm"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="re_guests" className="text-xs">
+                Guests
+              </Label>
+              <Input
+                id="re_guests"
+                type="number"
+                min={1}
+                max={maxOccupancy}
+                value={guests}
+                onChange={(e) => setGuests(parseInt(e.target.value, 10) || 1)}
+                disabled={isPending}
+                className="h-9 text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Capacity: {maxOccupancy}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="re_rate" className="text-xs">
+                Rate per night (₹)
+              </Label>
+              <Input
+                id="re_rate"
+                type="number"
+                min={0}
+                step="0.01"
+                value={rate}
+                onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
+                disabled={isPending}
+                className="h-9 text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Subtotal: {formatCurrency(newRoomSubtotal)}
+              </p>
+            </div>
           </div>
-          <p className="text-[11px] text-muted-foreground -mt-3">
-            Room capacity: {maxOccupancy} guests
-          </p>
 
-          {/* Add-ons */}
           <div className="space-y-3 pt-3 border-t border-border">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
@@ -242,7 +276,6 @@ export function RoomEditButton({
             })}
           </div>
 
-          {/* Live total preview */}
           {addonsTotal > 0 && (
             <div className="flex items-center justify-between pt-3 border-t border-border text-sm">
               <span className="text-muted-foreground">Add-ons subtotal</span>

@@ -430,3 +430,162 @@ export async function updateBookingRoom(
   revalidatePath(`/bookings`);
   return { success: true };
 }
+
+
+// =============================================================================
+// Override the nightly rate for one room (manual discount / comp)
+// =============================================================================
+
+const UpdateRoomRateSchema = z.object({
+  booking_id: z.string().uuid(),
+  booking_room_id: z.string().uuid(),
+  rate_per_night: z.number().min(0),
+});
+
+export type UpdateRoomRateInput = z.infer<typeof UpdateRoomRateSchema>;
+
+export async function updateBookingRoomRate(
+  input: UpdateRoomRateInput
+): Promise<ActionResult> {
+  const parsed = UpdateRoomRateSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  const { error } = await auth.supabase.rpc("update_booking_room_rate", {
+    p_booking_id: parsed.data.booking_id,
+    p_booking_room_id: parsed.data.booking_room_id,
+    p_rate_per_night: parsed.data.rate_per_night,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/bookings/${parsed.data.booking_id}`);
+  return { success: true };
+}
+
+// =============================================================================
+// Add a brand-new room to an existing booking
+// =============================================================================
+
+const AddRoomSchema = z.object({
+  booking_id: z.string().uuid(),
+  room_id: z.string().uuid(),
+  guests: z.number().int().min(1),
+  addons: z
+    .array(
+      z.object({
+        addon_id: z.string().uuid(),
+        quantity: z.number().int().min(1),
+      })
+    )
+    .default([]),
+});
+
+export type AddRoomInput = z.infer<typeof AddRoomSchema>;
+
+export async function addRoomToBooking(
+  input: AddRoomInput
+): Promise<ActionResult> {
+  const parsed = AddRoomSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  const { error } = await auth.supabase.rpc("add_room_to_booking", {
+    p_booking_id: parsed.data.booking_id,
+    p_room_id: parsed.data.room_id,
+    p_guests: parsed.data.guests,
+    p_addons: parsed.data.addons,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/bookings/${parsed.data.booking_id}`);
+  revalidatePath(`/bookings`);
+  return { success: true };
+}
+
+// =============================================================================
+// Remove a room from a booking
+// =============================================================================
+
+const RemoveRoomSchema = z.object({
+  booking_id: z.string().uuid(),
+  booking_room_id: z.string().uuid(),
+});
+
+export type RemoveRoomInput = z.infer<typeof RemoveRoomSchema>;
+
+export async function removeRoomFromBooking(
+  input: RemoveRoomInput
+): Promise<ActionResult> {
+  const parsed = RemoveRoomSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  const { error } = await auth.supabase.rpc("remove_room_from_booking", {
+    p_booking_id: parsed.data.booking_id,
+    p_booking_room_id: parsed.data.booking_room_id,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/bookings/${parsed.data.booking_id}`);
+  revalidatePath(`/bookings`);
+  return { success: true };
+}
+
+// =============================================================================
+// Atomically swap one room for another
+// =============================================================================
+
+const SwapRoomSchema = z.object({
+  booking_id: z.string().uuid(),
+  old_booking_room_id: z.string().uuid(),
+  new_room_id: z.string().uuid(),
+});
+
+export type SwapRoomInput = z.infer<typeof SwapRoomSchema>;
+
+export async function swapBookingRoom(
+  input: SwapRoomInput
+): Promise<ActionResult> {
+  const parsed = SwapRoomSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  const { error } = await auth.supabase.rpc("swap_booking_room", {
+    p_booking_id: parsed.data.booking_id,
+    p_old_booking_room_id: parsed.data.old_booking_room_id,
+    p_new_room_id: parsed.data.new_room_id,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/bookings/${parsed.data.booking_id}`);
+  revalidatePath(`/bookings`);
+  return { success: true };
+}
