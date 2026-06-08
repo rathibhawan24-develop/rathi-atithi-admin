@@ -44,10 +44,13 @@ export const LINKS = {
   website: "https://rathiatithibhawan.org",
   instagram: "https://www.instagram.com/rathiatithibhawan/",
   googleMaps: "https://maps.app.goo.gl/e8k3G1SyH67v2zb66",
+  // Contact numbers (in display order: reception first, then owner, then WhatsApp)
+  reception: "+91 82184 18154",
+  receptionTel: "+918218418154",
+  phone: "+91 75000 49911",
+  phoneTel: "+917500049911",
   whatsapp: "https://wa.me/919028690659",
   whatsappDisplay: "+91 90286 90659",
-  phone: "+91 82184 18154",
-  phoneTel: "+918218418154",
   email: "rathibhawan24@gmail.com",
 };
 
@@ -98,12 +101,12 @@ function renderShell(opts: {
             <td width="50%" style="padding-right:8px;">
               <p style="margin:0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:10px;letter-spacing:2px;text-transform:uppercase;">Check-in</p>
               <p style="margin:2px 0 0;color:${BRAND.text};font-family:${FONT_SANS};font-size:14px;font-weight:600;">${fmtDate(b.check_in)}</p>
-              <p style="margin:1px 0 0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:11px;">after 12:00 PM</p>
+              <p style="margin:1px 0 0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:11px;">after 11:00 AM</p>
             </td>
             <td width="50%" style="padding-left:8px;border-left:1px dashed ${BRAND.border};">
               <p style="margin:0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:10px;letter-spacing:2px;text-transform:uppercase;">Check-out</p>
               <p style="margin:2px 0 0;color:${BRAND.text};font-family:${FONT_SANS};font-size:14px;font-weight:600;">${fmtDate(b.check_out)}</p>
-              <p style="margin:1px 0 0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:11px;">by 11:00 AM</p>
+              <p style="margin:1px 0 0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:11px;">by 10:00 AM</p>
             </td>
           </tr>
         </table>
@@ -206,6 +209,11 @@ function renderShell(opts: {
               Gyan Gudadi, Old Vrindavan · Mathura · Uttar Pradesh
             </p>
             <p style="margin:0 0 14px;font-family:${FONT_SANS};font-size:12px;">
+              <a href="tel:${LINKS.receptionTel}" style="color:${BRAND.primaryDeep};text-decoration:none;">Reception ${LINKS.reception}</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 0 2px;">
               <a href="tel:${LINKS.phoneTel}" style="color:${BRAND.primaryDeep};text-decoration:none;">Call ${LINKS.phone}</a>
               &nbsp;·&nbsp;
               <a href="${LINKS.whatsapp}" style="color:${BRAND.primaryDeep};text-decoration:none;">WhatsApp ${LINKS.whatsappDisplay}</a>
@@ -296,7 +304,7 @@ export function emailConfirmed(booking: BookingForEmail): { subject: string; htm
         <tr><td style="background:${BRAND.primarySoft};border-radius:10px;padding:18px 22px;">
           <p style="margin:0 0 8px;color:${BRAND.primaryDeep};font-family:${FONT_SANS};font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Before you arrive</p>
           <ul style="margin:0;padding-left:18px;color:${BRAND.text};font-family:${FONT_SANS};font-size:13px;line-height:1.7;">
-            <li>Check-in is from 12:00 PM, check-out by 11:00 AM</li>
+            <li>Check-in is from 11:00 AM, check-out by 10:00 AM</li>
             <li>Please carry a valid photo ID (Aadhaar / passport / driving licence)</li>
             ${booking.balance > 0 ? `<li>Balance of <strong>${fmtCurrency(booking.balance)}</strong> is payable on arrival</li>` : ""}
             <li>Need a taxi or station pickup? Reply to this email and we'll arrange it</li>
