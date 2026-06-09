@@ -16,6 +16,10 @@ export type BookingForEmail = {
   total_amount: number;
   paid_amount: number;
   balance: number;
+  discount_amount?: number;
+  discount_type?: "none" | "percent" | "amount";
+  discount_value?: number;
+  gross_subtotal?: number;
   rooms: { room_number: string; room_type: string }[];
 };
 
@@ -122,9 +126,31 @@ function renderShell(opts: {
           : `
       <tr><td style="border-top:1px solid ${BRAND.border};padding:14px 22px 18px;">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+          ${
+            (b.discount_amount ?? 0) > 0
+              ? `<tr>
+            <td><p style="margin:0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:12px;">Subtotal</p></td>
+            <td align="right"><p style="margin:0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:13px;">${fmtCurrency(
+                  b.gross_subtotal ?? (b.total_amount + (b.discount_amount ?? 0))
+                )}</p></td>
+          </tr>
           <tr>
-            <td><p style="margin:0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:12px;">Total</p></td>
-            <td align="right"><p style="margin:0;color:${BRAND.text};font-family:${FONT_SANS};font-size:14px;font-weight:600;">${fmtCurrency(b.total_amount)}</p></td>
+            <td><p style="margin:4px 0 0;color:${BRAND.primaryDeep};font-family:${FONT_SANS};font-size:12px;">Discount${
+                  b.discount_type === "percent" ? ` (${b.discount_value}%)` : ""
+                }</p></td>
+            <td align="right"><p style="margin:4px 0 0;color:${BRAND.primaryDeep};font-family:${FONT_SANS};font-size:13px;font-weight:600;">− ${fmtCurrency(
+                  b.discount_amount ?? 0
+                )}</p></td>
+          </tr>`
+              : ""
+          }
+          <tr>
+            <td><p style="margin:${
+              (b.discount_amount ?? 0) > 0 ? "6px 0 0" : "0"
+            };color:${BRAND.muted};font-family:${FONT_SANS};font-size:12px;">Total</p></td>
+            <td align="right"><p style="margin:${
+              (b.discount_amount ?? 0) > 0 ? "6px 0 0" : "0"
+            };color:${BRAND.text};font-family:${FONT_SANS};font-size:14px;font-weight:600;">${fmtCurrency(b.total_amount)}</p></td>
           </tr>
           <tr>
             <td><p style="margin:6px 0 0;color:${BRAND.muted};font-family:${FONT_SANS};font-size:12px;">Paid</p></td>

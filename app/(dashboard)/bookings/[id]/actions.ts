@@ -589,3 +589,50 @@ export async function swapBookingRoom(
   revalidatePath(`/bookings`);
   return { success: true };
 }
+
+
+// =============================================================================
+// Apply or clear a discount on a booking
+// =============================================================================
+
+const SetDiscountSchema = z.object({
+  booking_id: z.string().uuid(),
+  discount_type: z.enum(["none", "percent", "amount"]),
+  discount_value: z.number().min(0),
+});
+
+export type SetDiscountInput = z.infer<typeof SetDiscountSchema>;
+
+export async function setBookingDiscount(
+  input: SetDiscountInput
+): Promise<ActionResult> {
+  const parsed = SetDiscountSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  // Extra client-side validation matching the RPC
+  if (
+    parsed.data.discount_type === "percent" &&
+    parsed.data.discount_value > 100
+  ) {
+    return { success: false, error: "Percentage cannot exceed 100" };
+  }
+
+  const { error } = await auth.supabase.rpc("set_booking_discount", {
+    p_booking_id: parsed.data.booking_id,
+    p_discount_type: parsed.data.discount_type,
+    p_discount_value: parsed.data.discount_value,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/bookings/${parsed.data.booking_id}`);
+  revalidatePath(`/bookings`);
+  return { success: true };
+}

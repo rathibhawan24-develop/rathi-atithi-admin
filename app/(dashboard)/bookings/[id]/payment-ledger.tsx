@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { addPayment, deletePayment } from "./actions";
+import { DiscountButton } from "./discount-form";
 import type { Payment, PaymentMode } from "@/lib/types";
 
 type Props = {
@@ -48,6 +49,12 @@ type Props = {
   balance: number;
   isAdmin: boolean;
   canRecordPayments: boolean; // false on cancelled/expired
+  // Discount fields
+  bookingStatus: string;
+  grossSubtotal: number;
+  discountType: "none" | "percent" | "amount";
+  discountValue: number;
+  discountAmount: number;
 };
 
 const MODE_LABELS: Record<PaymentMode, string> = {
@@ -70,6 +77,12 @@ export function PaymentLedger({
   balance,
   isAdmin,
   canRecordPayments,
+  bookingStatus,
+  grossSubtotal,
+  discountType,
+  discountValue,
+  discountAmount,
+
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -190,6 +203,44 @@ export function PaymentLedger({
           </div>
         </div>
       </div>
+
+      {/* Discount row */}
+      {discountType !== "none" ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Discount applied:</span>
+            <span className="font-medium tabular-nums">
+              {discountType === "percent"
+                ? `${discountValue}%`
+                : formatCurrency(discountValue)}
+            </span>
+            <span className="text-muted-foreground tabular-nums">
+              (− {formatCurrency(discountAmount)})
+            </span>
+          </div>
+          <DiscountButton
+            bookingId={bookingId}
+            bookingStatus={bookingStatus}
+            grossSubtotal={grossSubtotal}
+            currentDiscountType={discountType}
+            currentDiscountValue={discountValue}
+            currentDiscountAmount={discountAmount}
+          />
+        </div>
+      ) : (
+        canRecordPayments && (
+          <div className="flex items-center justify-end pb-3 border-b border-border">
+            <DiscountButton
+              bookingId={bookingId}
+              bookingStatus={bookingStatus}
+              grossSubtotal={grossSubtotal}
+              currentDiscountType={discountType}
+              currentDiscountValue={discountValue}
+              currentDiscountAmount={discountAmount}
+            />
+          </div>
+        )
+      )}
 
       {/* Action buttons */}
       {canRecordPayments && (

@@ -70,6 +70,8 @@ export async function sendBookingEmail(
       id, booking_code, guest_name, email, phone,
       check_in, check_out, nights,
       total_amount, paid_amount, balance,
+      rooms_subtotal, addons_subtotal,
+      discount_type, discount_value, discount_amount,
       notifications_sent,
       booking_rooms (
         rate_per_night, guests,
@@ -118,6 +120,15 @@ export async function sendBookingEmail(
     total_amount: Number(booking.total_amount),
     paid_amount: Number(booking.paid_amount),
     balance: Number(booking.balance),
+    discount_type: (booking.discount_type ?? "none") as
+      | "none"
+      | "percent"
+      | "amount",
+    discount_value: Number(booking.discount_value ?? 0),
+    discount_amount: Number(booking.discount_amount ?? 0),
+    gross_subtotal:
+      Number(booking.rooms_subtotal ?? 0) +
+      Number(booking.addons_subtotal ?? 0),
     rooms,
   };
 

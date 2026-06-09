@@ -77,6 +77,9 @@ type BookingRow = {
   rooms_subtotal: number | string;
   addons_subtotal: number | string;
   total_amount: number | string;
+  discount_type: "none" | "percent" | "amount";
+  discount_value: number | string;
+  discount_amount: number | string;
   paid_amount: number | string;
   balance: number | string;
   status: BookingStatus;
@@ -485,6 +488,14 @@ export default async function BookingDetailPage({
                 balance={balance}
                 isAdmin={isAdmin}
                 canRecordPayments={canRecordPayments}
+                bookingStatus={booking.status}
+                grossSubtotal={
+                  Number(booking.rooms_subtotal) +
+                  Number(booking.addons_subtotal)
+                }
+                discountType={booking.discount_type ?? "none"}
+                discountValue={Number(booking.discount_value ?? 0)}
+                discountAmount={Number(booking.discount_amount ?? 0)}
               />
             </CardContent>
           </Card>
