@@ -85,6 +85,7 @@ type BookingRow = {
   balance: number | string;
   status: BookingStatus;
   notification_log: Record<string, unknown> | null;
+  notifications_sent: string[] | null;
   source: string;
   special_requests: string | null;
   internal_notes: string | null;
@@ -508,6 +509,7 @@ export default async function BookingDetailPage({
             bookingStatus={booking.status}
             bookingSource={booking.source ?? null}
             log={(booking.notification_log ?? {}) as Record<string, never>}
+            notificationsSent={(booking.notifications_sent ?? []) as string[]}
           />
         </div>
 
