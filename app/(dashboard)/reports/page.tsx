@@ -9,14 +9,14 @@ import {
   TrendingUp,
   Building2,
   Globe,
+  Phone,
   Tag,
   Ban,
   Bed,
   CircleDollarSign,
   CheckCircle2,
   AlertCircle,
-  Percent,
-} from "lucide-react";
+  Percent} from "lucide-react";
 import { format, parseISO, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -313,16 +313,28 @@ export default async function ReportsPage({
     uniqueGuests > 0 ? (repeatUniqueGuests / uniqueGuests) * 100 : 0;
 
   // Source breakdown
-  type SrcKey = "walk_in" | "online" | "other";
+  // Source breakdown — accept the actual source values in use:
+  //   web      → customer site (online)
+  //   walk_in  → admin walk-in
+  //   phone    → admin phone booking
+  //   other    → anything else (imports, legacy, unknown)
+  type SrcKey = "web" | "walk_in" | "phone" | "other";
   const sourceMap: Record<SrcKey, { count: number; revenue: number }> = {
+    web: { count: 0, revenue: 0 },
     walk_in: { count: 0, revenue: 0 },
-    online: { count: 0, revenue: 0 },
+    phone: { count: 0, revenue: 0 },
     other: { count: 0, revenue: 0 },
   };
   for (const b of bookingsInRange) {
     const src = b.source ?? "";
     const key: SrcKey =
-      src === "walk_in" ? "walk_in" : src === "online" ? "online" : "other";
+      src === "web" || src === "online"
+        ? "web"
+        : src === "walk_in"
+        ? "walk_in"
+        : src === "phone"
+        ? "phone"
+        : "other";
     sourceMap[key].count += 1;
     if (
       b.status !== "cancelled" &&
@@ -468,17 +480,25 @@ export default async function ReportsPage({
           </CardHeader>
           <CardContent className="space-y-3">
             <SourceRow
+              icon={Globe}
+              label="Customer site (online)"
+              count={sourceMap.web.count}
+              revenue={sourceMap.web.revenue}
+            />
+            <SourceRow
               icon={Building2}
               label="Walk-in"
               count={sourceMap.walk_in.count}
               revenue={sourceMap.walk_in.revenue}
             />
-            <SourceRow
-              icon={Globe}
-              label="Customer site (online)"
-              count={sourceMap.online.count}
-              revenue={sourceMap.online.revenue}
-            />
+            {sourceMap.phone.count > 0 && (
+              <SourceRow
+                icon={Phone}
+                label="Phone booking"
+                count={sourceMap.phone.count}
+                revenue={sourceMap.phone.revenue}
+              />
+            )}
             {sourceMap.other.count > 0 && (
               <SourceRow
                 icon={Tag}

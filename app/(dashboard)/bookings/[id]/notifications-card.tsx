@@ -126,9 +126,9 @@ function getStagesToShow(
   // Expected stages based on current status
   if (status === "cancelled") {
     set.add("cancelled");
-    if (source === "online") set.add("received");
+    if (source === "web" || source === "online") set.add("received");
   } else {
-    if (source === "online") set.add("received");
+    if (source === "web" || source === "online") set.add("received");
     if (["confirmed", "checked_in", "checked_out"].includes(status)) {
       set.add("confirmed");
     }
