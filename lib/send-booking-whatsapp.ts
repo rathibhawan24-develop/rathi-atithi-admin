@@ -15,10 +15,29 @@
  *   distinct keys so each is independent:
  *     email: "received", "confirmed", "checked_in", "checked_out", "cancelled"
  *     whatsapp: "whatsapp_received", "whatsapp_confirmed", ...
+ *
+ * Resilience:
+ *   Outbound fetch uses fetchWithRetry — bounded retries on network errors
+ *   only (no retry on non-2xx HTTP since the server actively rejected). Per
+ *   attempt has an AbortController timeout so we never hang forever.
+ *
+ * Visibility:
+ *   Every terminal outcome (sent / failed / skipped) is also written to
+ *   bookings.notification_log via logNotificationAttempt, so the admin UI
+ *   can show delivery status per stage per channel.
  */
 
 import { createClient } from "@supabase/supabase-js";
 import type { EmailStage } from "./email-templates";
+import { logNotificationAttempt } from "./notification-log";
+
+// Retry tuning. Total worst-case execution time =
+//   MAX_ATTEMPTS * FETCH_TIMEOUT_MS + (MAX_ATTEMPTS - 1) * RETRY_BACKOFF_MS
+// With 2 attempts at 5s + 1s backoff this is ~11s, well under the route's
+// 30s maxDuration limit set in the route handler.
+const FETCH_TIMEOUT_MS = 5000;
+const RETRY_BACKOFF_MS = 1000;
+const MAX_ATTEMPTS = 2;
 
 const FILLRACKS_API_KEY = process.env.FILLRACKS_API_KEY;
 const FILLRACKS_ENDPOINT =
@@ -66,11 +85,45 @@ function formatDate(iso: string): string {
   return `${parts[2]}-${parts[1]}-${parts[0]}`;
 }
 
+/** fetch with per-attempt timeout + bounded retries. Only retries on network
+ *  / abort errors (not on non-2xx HTTP), since the latter means the server
+ *  actively rejected the request and a retry would just get the same reject. */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit
+): Promise<{ resp: Response; attempts: number }> {
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const resp = await fetch(url, { ...init, signal: ctrl.signal });
+      clearTimeout(timer);
+      return { resp, attempts: attempt };
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = e;
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 export async function sendBookingWhatsapp(
   bookingId: string,
-  stage: EmailStage
+  stage: EmailStage,
+  options?: { force?: boolean }
 ): Promise<SendResult> {
+  const force = options?.force === true;
+
   if (!FILLRACKS_API_KEY) {
+    await logNotificationAttempt(bookingId, "whatsapp", stage, {
+      status: "skipped",
+      attempts: 0,
+      reason: "no_api_key",
+    });
     return {
       ok: false,
       error: "FILLRACKS_API_KEY not configured — WhatsApp is disabled.",
@@ -82,6 +135,11 @@ export async function sendBookingWhatsapp(
 
   const template = STAGE_TO_TEMPLATE[stage];
   if (!template) {
+    await logNotificationAttempt(bookingId, "whatsapp", stage, {
+      status: "skipped",
+      attempts: 0,
+      reason: `no_whatsapp_template_for_${stage}`,
+    });
     return {
       ok: true,
       skipped: true,
@@ -115,6 +173,11 @@ export async function sendBookingWhatsapp(
   }
 
   if (!booking.phone) {
+    await logNotificationAttempt(bookingId, "whatsapp", stage, {
+      status: "skipped",
+      attempts: 0,
+      reason: "no_phone_on_booking",
+    });
     return { ok: true, skipped: true, reason: "no_phone_on_booking" };
   }
 
@@ -122,7 +185,7 @@ export async function sendBookingWhatsapp(
   const alreadySent: string[] = Array.isArray(booking.notifications_sent)
     ? (booking.notifications_sent as string[])
     : [];
-  if (alreadySent.includes(sentKey)) {
+  if (!force && alreadySent.includes(sentKey)) {
     return { ok: true, skipped: true, reason: "already_sent" };
   }
 
@@ -132,9 +195,8 @@ export async function sendBookingWhatsapp(
       ?.reduce((sum, br) => sum + (Number(br.guests) || 0), 0) ?? 0;
 
   // Build the payload. Fillracks WhatsApp config maps each template `type`
-  // to a Meta template name and exposes named variables that match what
-  // each template body uses. All 5 booking-lifecycle templates share the
-  // same variable schema for simplicity:
+  // to a Meta template name and exposes named variables. All 5 booking-
+  // lifecycle templates share the same variable schema for simplicity:
   //   customer_name, booking_id, checkin_date, checkout_date, guest_count
   const payload = {
     to: formatPhone(booking.phone),
@@ -147,8 +209,9 @@ export async function sendBookingWhatsapp(
   };
 
   let resp: Response;
+  let attempts = 1;
   try {
-    resp = await fetch(FILLRACKS_ENDPOINT, {
+    const out = await fetchWithRetry(FILLRACKS_ENDPOINT, {
       method: "POST",
       headers: {
         "x-api-key": FILLRACKS_API_KEY,
@@ -157,13 +220,16 @@ export async function sendBookingWhatsapp(
       },
       body: JSON.stringify(payload),
     });
+    resp = out.resp;
+    attempts = out.attempts;
   } catch (e) {
-    return {
-      ok: false,
-      error: `Fillracks network error: ${
-        e instanceof Error ? e.message : String(e)
-      }`,
-    };
+    const error = `Fillracks network error after ${MAX_ATTEMPTS} attempts: ${e instanceof Error ? e.message : String(e)}`;
+    await logNotificationAttempt(bookingId, "whatsapp", stage, {
+      status: "failed",
+      attempts: MAX_ATTEMPTS,
+      error,
+    });
+    return { ok: false, error };
   }
 
   // Fillracks returns 202 with { status: "success", jobId } for successful
@@ -175,10 +241,13 @@ export async function sendBookingWhatsapp(
     } catch {
       // ignore
     }
-    return {
-      ok: false,
-      error: `Fillracks HTTP ${resp.status}: ${detail.slice(0, 300)}`,
-    };
+    const error = `Fillracks HTTP ${resp.status}: ${detail.slice(0, 300)}`;
+    await logNotificationAttempt(bookingId, "whatsapp", stage, {
+      status: "failed",
+      attempts,
+      error,
+    });
+    return { ok: false, error };
   }
 
   // Parse so we can log the jobId — useful if the user later asks "did it
@@ -193,9 +262,10 @@ export async function sendBookingWhatsapp(
     // ignore — response might be plain text
   }
 
-  // Mark stage as sent. Failure to update is logged but doesn't bubble up —
+  // Mark stage as sent. Use Set semantics so force-resend doesn't dupe.
+  // Failure to update notifications_sent is logged but doesn't bubble up —
   // the message was already accepted by Fillracks.
-  const nextSent = [...alreadySent, sentKey];
+  const nextSent = Array.from(new Set([...alreadySent, sentKey]));
   const { error: updateErr } = await supabase
     .from("bookings")
     .update({ notifications_sent: nextSent })
@@ -207,9 +277,16 @@ export async function sendBookingWhatsapp(
     );
   } else {
     console.log(
-      `[whatsapp] Sent ${stage} booking=${bookingId} jobId=${jobId}`
+      `[whatsapp] Sent ${stage} booking=${bookingId} jobId=${jobId} attempts=${attempts}`
     );
   }
+
+  // Write the detailed status to notification_log for admin visibility
+  await logNotificationAttempt(bookingId, "whatsapp", stage, {
+    status: "sent",
+    attempts,
+    jobId,
+  });
 
   return { ok: true };
 }

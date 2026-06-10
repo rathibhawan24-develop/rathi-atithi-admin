@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { BookingActionsBar } from "./booking-actions-bar";
 import { PaymentLedger } from "./payment-ledger";
+import { NotificationsCard } from "./notifications-card";
 import { GuestEditButton } from "./guest-edit-form";
 import { StayEditButton } from "./stay-edit-form";
 import { RoomEditButton } from "./room-edit-form";
@@ -83,6 +84,7 @@ type BookingRow = {
   paid_amount: number | string;
   balance: number | string;
   status: BookingStatus;
+  notification_log: Record<string, unknown> | null;
   source: string;
   special_requests: string | null;
   internal_notes: string | null;
@@ -499,6 +501,14 @@ export default async function BookingDetailPage({
               />
             </CardContent>
           </Card>
+
+          {/* Notifications */}
+          <NotificationsCard
+            bookingId={booking.id}
+            bookingStatus={booking.status}
+            bookingSource={booking.source ?? null}
+            log={(booking.notification_log ?? {}) as Record<string, never>}
+          />
         </div>
 
         {/* RIGHT COLUMN */}

@@ -12,8 +12,13 @@
  * Idempotency:
  *   Each booking has a `notifications_sent` jsonb array. Before sending we
  *   check whether this stage already shipped; if so we return success without
- *   re-sending. After a successful send we append the stage. This protects
- *   against double-clicks, API retries, and React strict-mode double-fires.
+ *   re-sending. After a successful send we append the stage. Pass force=true
+ *   to bypass this check for manual resends from the admin UI.
+ *
+ * Visibility:
+ *   Every terminal outcome (sent/failed/skipped) is also written to
+ *   bookings.notification_log via logNotificationAttempt so the admin UI
+ *   can show per-stage delivery status with timestamps and retry buttons.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -22,6 +27,7 @@ import {
   type EmailStage,
   type BookingForEmail,
 } from "./email-templates";
+import { logNotificationAttempt } from "./notification-log";
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const FROM_ADDRESS =
@@ -40,9 +46,17 @@ export type SendResult =
 
 export async function sendBookingEmail(
   bookingId: string,
-  stage: EmailStage
+  stage: EmailStage,
+  options?: { force?: boolean }
 ): Promise<SendResult> {
+  const force = options?.force === true;
+
   if (!BREVO_API_KEY) {
+    await logNotificationAttempt(bookingId, "email", stage, {
+      status: "skipped",
+      attempts: 0,
+      reason: "no_api_key",
+    });
     return {
       ok: false,
       error: "BREVO_API_KEY not configured — emails are disabled.",
@@ -62,7 +76,6 @@ export async function sendBookingEmail(
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Fetch the booking with rooms joined
   const { data: booking, error: fetchErr } = await supabase
     .from("bookings")
     .select(
@@ -89,25 +102,36 @@ export async function sendBookingEmail(
     };
   }
 
-  // No email = silent skip. Legacy imports + walk-ins without email land here.
   if (!booking.email) {
+    await logNotificationAttempt(bookingId, "email", stage, {
+      status: "skipped",
+      attempts: 0,
+      reason: "no_email_on_booking",
+    });
     return { ok: true, skipped: true, reason: "no_email_on_booking" };
   }
 
-  // Idempotency check
   const alreadySent: string[] = Array.isArray(booking.notifications_sent)
     ? (booking.notifications_sent as string[])
     : [];
-  if (alreadySent.includes(stage)) {
+  if (!force && alreadySent.includes(stage)) {
     return { ok: true, skipped: true, reason: "already_sent" };
   }
 
-  // Shape rooms for the template
-  const rooms = ((booking.booking_rooms as unknown as Array<{
-    rooms: { room_number: string; room_type: string } | null;
-  }>) ?? [])
-    .map((br) => br.rooms)
-    .filter((r): r is { room_number: string; room_type: string } => !!r);
+  // Build the shape the email template expects, including discount fields
+  // so the totals block renders Subtotal → Discount → Total correctly
+  // when a discount is applied.
+  const rooms = (
+    booking.booking_rooms as unknown as Array<{
+      rate_per_night: number | string;
+      guests: number;
+      rooms: { room_number: string; room_type: string } | null;
+    }>
+  ).flatMap((br) =>
+    br.rooms
+      ? [{ room_number: br.rooms.room_number, room_type: br.rooms.room_type }]
+      : []
+  );
 
   const forEmail: BookingForEmail = {
     booking_code: booking.booking_code,
@@ -134,7 +158,6 @@ export async function sendBookingEmail(
 
   const { subject, html } = renderEmail(stage, forEmail);
 
-  // Send via Brevo's transactional email API
   let resp: Response;
   try {
     resp = await fetch(BREVO_ENDPOINT, {
@@ -145,22 +168,23 @@ export async function sendBookingEmail(
         Accept: "application/json",
       },
       body: JSON.stringify({
-        sender: { name: FROM_NAME, email: FROM_ADDRESS },
+        sender: { email: FROM_ADDRESS, name: FROM_NAME },
         to: [{ email: booking.email, name: booking.guest_name }],
-        replyTo: { email: REPLY_TO, name: FROM_NAME },
+        replyTo: { email: REPLY_TO },
         subject,
         htmlContent: html,
-        headers: {
-          "X-Entity-Ref-ID": `${booking.booking_code}:${stage}`,
-        },
-        tags: [`stage:${stage}`, "booking-lifecycle"],
       }),
     });
   } catch (e) {
-    return {
-      ok: false,
-      error: `Brevo network error: ${e instanceof Error ? e.message : String(e)}`,
-    };
+    const error = `Brevo network error: ${
+      e instanceof Error ? e.message : String(e)
+    }`;
+    await logNotificationAttempt(bookingId, "email", stage, {
+      status: "failed",
+      attempts: 1,
+      error,
+    });
+    return { ok: false, error };
   }
 
   if (!resp.ok) {
@@ -170,15 +194,30 @@ export async function sendBookingEmail(
     } catch {
       // ignore
     }
-    return {
-      ok: false,
-      error: `Brevo HTTP ${resp.status}: ${detail.slice(0, 300)}`,
-    };
+    const error = `Brevo HTTP ${resp.status}: ${detail.slice(0, 300)}`;
+    await logNotificationAttempt(bookingId, "email", stage, {
+      status: "failed",
+      attempts: 1,
+      error,
+    });
+    return { ok: false, error };
   }
 
-  // Append this stage to notifications_sent. If the update fails, the email
-  // already went out — log and return success so the caller's flow proceeds.
-  const nextSent = [...alreadySent, stage];
+  // Parse messageId for logging — useful when debugging "did this email
+  // actually deliver" with Brevo support.
+  let messageId: string | undefined;
+  try {
+    const json = await resp.json();
+    if (json && typeof json === "object" && "messageId" in json) {
+      messageId = String((json as { messageId: unknown }).messageId);
+    }
+  } catch {
+    // ignore — response might be plain text
+  }
+
+  // Append stage to notifications_sent (deduped). Failure to update is logged
+  // but doesn't bubble up — the email was already sent via Brevo.
+  const nextSent = Array.from(new Set([...alreadySent, stage]));
   const { error: updateErr } = await supabase
     .from("bookings")
     .update({ notifications_sent: nextSent })
@@ -188,7 +227,18 @@ export async function sendBookingEmail(
     console.warn(
       `[email] Sent stage=${stage} booking=${bookingId} but failed to update notifications_sent: ${updateErr.message}`
     );
+  } else {
+    console.log(
+      `[email] Sent stage=${stage} booking=${bookingId} messageId=${messageId}`
+    );
   }
+
+  // Write detailed status to notification_log for admin visibility
+  await logNotificationAttempt(bookingId, "email", stage, {
+    status: "sent",
+    attempts: 1,
+    messageId,
+  });
 
   return { ok: true };
 }

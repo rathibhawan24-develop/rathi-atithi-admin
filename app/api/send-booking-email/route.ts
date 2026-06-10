@@ -20,6 +20,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendBookingEmail } from "@/lib/send-booking-email";
 import type { EmailStage } from "@/lib/email-templates";
 
+
+export const maxDuration = 30; // allow notification retries
 const ALLOWED_ORIGINS = [
   "https://rathiatithibhawan.org",
   "https://www.rathiatithibhawan.org",

@@ -17,6 +17,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendBookingWhatsapp } from "@/lib/send-booking-whatsapp";
 import type { EmailStage } from "@/lib/email-templates";
 
+
+export const maxDuration = 30; // allow notification retries
 const ALLOWED_ORIGINS = [
   "https://rathiatithibhawan.org",
   "https://www.rathiatithibhawan.org",

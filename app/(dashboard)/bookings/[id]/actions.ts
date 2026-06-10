@@ -636,3 +636,53 @@ export async function setBookingDiscount(
   revalidatePath(`/bookings`);
   return { success: true };
 }
+
+// =============================================================================
+// Manual resend of a notification (email or WhatsApp) for a given stage
+// =============================================================================
+const ResendNotificationSchema = z.object({
+  booking_id: z.string().uuid(),
+  stage: z.enum(["received", "confirmed", "checked_in", "checked_out", "cancelled"]),
+  channel: z.enum(["email", "whatsapp"]),
+});
+
+export type ResendNotificationInput = z.infer<typeof ResendNotificationSchema>;
+
+export async function resendNotification(
+  input: ResendNotificationInput
+): Promise<ActionResult> {
+  const parsed = ResendNotificationSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  const { booking_id, stage, channel } = parsed.data;
+
+  try {
+    if (channel === "email") {
+      const r = await sendBookingEmail(booking_id, stage, { force: true });
+      if (!r.ok) return { success: false, error: r.error };
+      if ("skipped" in r && r.skipped)
+        return { success: false, error: `Skipped: ${r.reason ?? "unknown"}` };
+    } else {
+      const r = await sendBookingWhatsapp(booking_id, stage, { force: true });
+      if (!r.ok) return { success: false, error: r.error };
+      if ("skipped" in r && r.skipped)
+        return { success: false, error: `Skipped: ${r.reason ?? "unknown"}` };
+    }
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Send threw",
+    };
+  }
+
+  revalidatePath(`/bookings/${booking_id}`);
+  return { success: true };
+}
