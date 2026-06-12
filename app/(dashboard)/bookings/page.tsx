@@ -8,7 +8,7 @@ import {
   Phone,
   Mail,
   IndianRupee,
-} from "lucide-react";
+  Bed} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,7 @@ async function getBookings(params: SearchParams) {
   let query = supabase
     .from("bookings")
     .select(
-      "id, booking_code, guest_name, phone, email, check_in, check_out, nights, total_amount, paid_amount, balance, status, source, created_at"
+      "id, booking_code, guest_name, phone, email, check_in, check_out, nights, total_amount, paid_amount, balance, status, source, created_at, booking_rooms ( rooms ( room_number ) )"
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -136,7 +136,7 @@ async function getBookings(params: SearchParams) {
     console.error("Failed to load bookings:", error);
     return [] as Booking[];
   }
-  return (data ?? []) as Booking[];
+  return (data ?? []) as unknown as Booking[];
 }
 
 function ViewBanner({ view }: { view: ViewKey }) {
@@ -252,9 +252,14 @@ function BookingRow({ booking }: { booking: Booking }) {
             <span className="inline-flex items-center gap-1">
               <Phone className="h-3 w-3" /> {booking.phone}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <Mail className="h-3 w-3" /> {booking.email}
-            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Bed className="h-3.5 w-3.5" />
+                {(booking.booking_rooms ?? [])
+                  .map((br: { rooms: { room_number: string } | null }) => br.rooms?.room_number)
+                  .filter(Boolean)
+                  .map((n: string | undefined) => `#${n}`)
+                  .join(", ")}
+              </span>
           </div>
         </div>
 

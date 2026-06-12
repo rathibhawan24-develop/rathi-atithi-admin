@@ -66,7 +66,7 @@ async function getCalendarData(startStr: string, endStr: string) {
         booking_rooms ( room_id )
       `
       )
-      .in("status", ["pending", "confirmed", "checked_in"])
+      .in("status", ["pending", "confirmed", "checked_in", "checked_out"])
       .lt("check_in", endStr)
       .gt("check_out", startStr),
   ]);

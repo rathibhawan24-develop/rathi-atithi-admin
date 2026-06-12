@@ -145,6 +145,8 @@ export type Booking = {
   cancelled_at: string | null;
   expires_at: string | null;
   updated_at: string;
+
+  booking_rooms?: { rooms: { room_number: string } | null }[] | null;
 };
 
 export type PaymentMode = "upi" | "cash" | "bank";
