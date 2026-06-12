@@ -85,6 +85,14 @@ async function getCalendarData(startStr: string, endStr: string) {
   };
 }
 
+/**
+ * Build a lookup: room_id → date → CellBooking[].
+ *
+ * The array (rather than single CellBooking) is essential: when staff
+ * accidentally double-book the same room on the same date — e.g. both
+ * Mamta sahoo and Rang jii choki landing in Room #1 on 11 Jun — we keep
+ * BOTH entries so the calendar can show the conflict.
+ */
 function buildLookup(
   bookings: Array<{
     id: string;
@@ -95,8 +103,8 @@ function buildLookup(
     check_out: string;
     booking_rooms: Array<{ room_id: string }>;
   }>
-): Map<string, Map<string, CellBooking>> {
-  const lookup = new Map<string, Map<string, CellBooking>>();
+): Map<string, Map<string, CellBooking[]>> {
+  const lookup = new Map<string, Map<string, CellBooking[]>>();
   for (const b of bookings) {
     for (const br of b.booking_rooms) {
       let perRoom = lookup.get(br.room_id);
@@ -109,7 +117,8 @@ function buildLookup(
       const out = parseISO(b.check_out);
       while (d < out) {
         const dateStr = format(d, "yyyy-MM-dd");
-        perRoom.set(dateStr, {
+        const existing = perRoom.get(dateStr) ?? [];
+        existing.push({
           bookingId: b.id,
           bookingCode: b.booking_code,
           guestName: b.guest_name,
@@ -117,6 +126,7 @@ function buildLookup(
           checkIn: b.check_in,
           checkOut: b.check_out,
         });
+        perRoom.set(dateStr, existing);
         d = addDays(d, 1);
       }
     }
@@ -171,6 +181,12 @@ function CalendarLegend() {
       <div className="flex items-center gap-1.5">
         <span className="inline-block h-3 w-3 rounded-sm bg-primary/10 border border-primary/30" />
         <span>Today</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-flex items-center justify-center h-3 w-3 rounded-sm bg-destructive text-destructive-foreground text-[8px] font-semibold leading-none">
+          2
+        </span>
+        <span>Double-booked</span>
       </div>
     </div>
   );
@@ -379,17 +395,35 @@ export default async function CalendarPage({
                         const dow = d.getDay();
                         const isWeekend = dow === 0 || dow === 6;
                         const isTodayCol = dateStr === today;
-                        const booking = lookup.get(room.id)?.get(dateStr);
+                        const bookingsInCell =
+                          lookup.get(room.id)?.get(dateStr) ?? [];
 
-                        if (booking) {
+                        // Empty cell
+                        if (bookingsInCell.length === 0) {
+                          return (
+                            <div
+                              key={`c-${room.id}-${dateStr}`}
+                              className={cn(
+                                "border-b border-border",
+                                cellHeightClass,
+                                isWeekend && "bg-muted/30",
+                                isTodayCol && "bg-primary/5"
+                              )}
+                            />
+                          );
+                        }
+
+                        // Single booking — original render
+                        if (bookingsInCell.length === 1) {
+                          const booking = bookingsInCell[0];
                           const isFirstDay = booking.checkIn === dateStr;
                           return (
                             <Link
                               key={`c-${room.id}-${dateStr}`}
                               href={`/bookings/${booking.bookingId}`}
-                              title={`${booking.guestName} · ${
-                                booking.bookingCode
-                              } · ${statusLabel(booking.status)}`}
+                              title={`${booking.guestName} · ${booking.bookingCode} · ${statusLabel(
+                                booking.status
+                              )}`}
                               className={cn(
                                 "border-b border-border truncate transition-colors flex items-center",
                                 cellHeightClass,
@@ -406,16 +440,60 @@ export default async function CalendarPage({
                             </Link>
                           );
                         }
+
+                        // Multiple bookings (double-booked) — split the cell
+                        // vertically into N stripes, one per booking. Each
+                        // stripe keeps its own status color so admin sees the
+                        // conflict at a glance. A red number badge in the
+                        // corner makes it impossible to miss.
+                        const tooltipNames = bookingsInCell
+                          .map(
+                            (b) =>
+                              `${b.guestName} (${b.bookingCode}, ${statusLabel(
+                                b.status
+                              )})`
+                          )
+                          .join(" + ");
                         return (
                           <div
                             key={`c-${room.id}-${dateStr}`}
                             className={cn(
-                              "border-b border-border",
+                              "border-b border-border flex flex-col relative",
                               cellHeightClass,
-                              isWeekend && "bg-muted/30",
-                              isTodayCol && "bg-primary/5"
+                              isTodayCol && "ring-1 ring-inset ring-primary/40"
                             )}
-                          />
+                            title={`Double-booked: ${tooltipNames}`}
+                          >
+                            {!isCompact && (
+                              <span className="absolute top-0 right-0 z-10 bg-destructive text-destructive-foreground text-[9px] leading-none px-1 py-0.5 rounded-bl font-semibold pointer-events-none">
+                                {bookingsInCell.length}
+                              </span>
+                            )}
+                            {bookingsInCell.map((booking, idx) => {
+                              const isFirstDay = booking.checkIn === dateStr;
+                              return (
+                                <Link
+                                  key={booking.bookingId}
+                                  href={`/bookings/${booking.bookingId}`}
+                                  title={`${booking.guestName} · ${booking.bookingCode} · ${statusLabel(
+                                    booking.status
+                                  )}`}
+                                  className={cn(
+                                    "flex-1 truncate transition-colors flex items-center min-h-0",
+                                    isCompact ? "px-0" : "px-1.5 text-[10px]",
+                                    statusCellClasses(booking.status),
+                                    idx > 0 && "border-t border-border/40"
+                                  )}
+                                >
+                                  {!isCompact && (
+                                    <span className="truncate">
+                                      {isFirstDay ? booking.guestName : "·"}
+                                    </span>
+                                  )}
+                                </Link>
+                              );
+                            })}
+                          </div>
                         );
                       })}
                     </React.Fragment>
@@ -436,7 +514,8 @@ export default async function CalendarPage({
 
       <Badge variant="muted" className="text-[10px]">
         Tip: click a colored cell to jump to that booking. Click a room label to
-        edit room details.
+        edit room details. Cells split into stripes with a red number badge are
+        double-booked — click each stripe to open the relevant booking.
       </Badge>
     </div>
   );
