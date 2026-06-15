@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
   const { data: profileRow } = await supabase
     .from("profiles")
     .select("role")
-    .eq("user_id", user.id)
+    .eq("id", user.id)
     .maybeSingle();
   const role = (profileRow?.role ?? null) as Parameters<typeof canViewReports>[0];
   if (!canViewReports(role)) {
