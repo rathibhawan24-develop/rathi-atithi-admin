@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
       "Booking code", "Created", "Status", "Source",
       "Guest name", "Phone", "Email",
       "Check-in", "Check-out", "Nights",
-      "Rooms", "Room subtotal", "Addons subtotal", "Discount", "Total",
+      "Room numbers", "Rooms", "Room subtotal", "Addons subtotal", "Discount", "Total",
       "Paid", "Balance",
     ];
     const lines = [csvRow(header)];
@@ -99,6 +99,11 @@ export async function GET(req: NextRequest) {
       total_amount: number; paid_amount: number; balance: number;
       booking_rooms: Array<{ room: { room_number: string; room_type: string } | null }>;
     }>) {
+      const roomNumbers = (b.booking_rooms ?? [])
+        .map((br) => br.room?.room_number)
+        .filter(Boolean)
+        .map((n) => `#${n}`)
+        .join(", ");
       const roomsLabel = (b.booking_rooms ?? [])
         .map((br) =>
           br.room ? `#${br.room.room_number} (${br.room.room_type})` : ""
@@ -117,6 +122,7 @@ export async function GET(req: NextRequest) {
           b.check_in,
           b.check_out,
           b.nights,
+          roomNumbers,
           roomsLabel,
           b.rooms_subtotal,
           b.addons_subtotal,

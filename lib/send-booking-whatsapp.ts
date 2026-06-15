@@ -158,8 +158,10 @@ export async function sendBookingWhatsapp(
       `
       id, booking_code, guest_name, phone,
       check_in, check_out, nights,
+      paid_amount, balance,
       notifications_sent,
-      booking_rooms ( guests )
+      booking_rooms ( guests ),
+      payments ( mode, amount )
     `
     )
     .eq("id", bookingId)
@@ -198,6 +200,36 @@ export async function sendBookingWhatsapp(
   // to a Meta template name and exposes named variables. All 5 booking-
   // lifecycle templates share the same variable schema for simplicity:
   //   customer_name, booking_id, checkin_date, checkout_date, guest_count
+  // Stage-specific fields. Confirmation message includes advance + due,
+  // checkout (thank you) message includes total paid + the modes used.
+  // Fillracks ignores any field that isn't declared on the template config,
+  // so we can ship these freely.
+  const paid = Number(booking.paid_amount ?? 0);
+  const due = Number(booking.balance ?? 0);
+  const modeLabel = (m: string): string =>
+    m === "upi" ? "UPI" : m === "cash" ? "Cash" : m === "bank" ? "Bank" : m;
+  const modesUsed = Array.from(
+    new Set(
+      (
+        (booking.payments ?? []) as unknown as Array<{
+          mode: string;
+          amount: number | string;
+        }>
+      )
+        .filter((px) => Number(px.amount) > 0)
+        .map((px) => modeLabel(px.mode))
+    )
+  ).join(", ");
+
+  const stageExtras: Record<string, string> = {};
+  if (stage === "confirmed") {
+    stageExtras.advance_paid = Math.round(paid).toString();
+    stageExtras.due_amount = Math.round(due).toString();
+  } else if (stage === "checked_out") {
+    stageExtras.total_paid = Math.round(paid).toString();
+    stageExtras.payment_mode = modesUsed || "N/A";
+  }
+
   const payload = {
     to: formatPhone(booking.phone),
     type: template,
@@ -206,6 +238,7 @@ export async function sendBookingWhatsapp(
     checkin_date: formatDate(booking.check_in),
     checkout_date: formatDate(booking.check_out),
     guest_count: String(Math.max(1, totalGuests)),
+    ...stageExtras,
   };
 
   let resp: Response;
