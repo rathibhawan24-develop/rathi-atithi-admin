@@ -40,7 +40,7 @@ export function ExcelDownload(props: Props) {
         let q = supabase
           .from("bookings")
           .select(
-            "booking_code, guest_name, phone, email, check_in, check_out, nights, status, source, total_amount, paid_amount, balance, special_requests, created_at"
+            "booking_code, guest_name, phone, email, check_in, check_out, nights, status, source, total_amount, paid_amount, balance, special_requests, created_at, booking_rooms(rooms(room_number))"
           )
           .order("created_at", { ascending: false });
 
@@ -75,6 +75,15 @@ export function ExcelDownload(props: Props) {
           "Email": b.email,
           "Check-in": b.check_in,
           "Check-out": b.check_out,
+          "Room numbers": (
+            (b.booking_rooms ?? []) as unknown as Array<{
+              rooms: { room_number: string } | null;
+            }>
+          )
+            .map((br) => br.rooms?.room_number)
+            .filter(Boolean)
+            .map((n) => `#${n}`)
+            .join(", "),
           "Nights": b.nights,
           "Status": b.status,
           "Source": b.source,
