@@ -22,11 +22,14 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { renderToBuffer } from "@react-pdf/renderer";
+import { createElement } from "react";
 import {
   renderEmail,
   type EmailStage,
   type BookingForEmail,
 } from "./email-templates";
+import { InvoicePDF, type BookingForInvoice } from "./invoice-pdf";
 import { logNotificationAttempt } from "./notification-log";
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
@@ -85,11 +88,12 @@ export async function sendBookingEmail(
       total_amount, paid_amount, balance,
       rooms_subtotal, addons_subtotal,
       discount_type, discount_value, discount_amount,
-      notifications_sent,
+      notifications_sent, created_at,
       booking_rooms (
-        rate_per_night, guests,
+        rate_per_night, nights, guests,
         rooms ( room_number, room_type )
-      )
+      ),
+      payments ( amount, mode )
     `
     )
     .eq("id", bookingId)
@@ -158,6 +162,60 @@ export async function sendBookingEmail(
 
   const { subject, html } = renderEmail(stage, forEmail);
 
+  // Generate invoice PDF attachment for checkout emails. PDF is rendered
+  // in-process (no HTTP fetch to the API route, no storage). If generation
+  // fails we still send the email — invoice is also accessible via the
+  // public /api/invoice/{booking_code} URL.
+  let attachment: Array<{ name: string; content: string }> | undefined;
+  if (stage === "checked_out") {
+    try {
+      const invoiceData: BookingForInvoice = {
+        booking_code: booking.booking_code,
+        guest_name: booking.guest_name,
+        phone: booking.phone,
+        email: booking.email,
+        check_in: booking.check_in,
+        check_out: booking.check_out,
+        nights: booking.nights,
+        paid_amount: Number(booking.paid_amount),
+        balance: Number(booking.balance),
+        total_amount: Number(booking.total_amount),
+        rooms_subtotal: Number(booking.rooms_subtotal ?? 0),
+        addons_subtotal: Number(booking.addons_subtotal ?? 0),
+        discount_amount: Number(booking.discount_amount ?? 0),
+        created_at: booking.created_at,
+        booking_rooms: (booking.booking_rooms ??
+          []) as unknown as BookingForInvoice["booking_rooms"],
+        payments:
+          (booking as unknown as {
+            payments?: Array<{ amount: number | string; mode?: string }>;
+          }).payments ?? [],
+      };
+      // renderToBuffer's type signature wants a DocumentElement, but
+      // createElement returns a generic FunctionComponentElement. The runtime
+      // behaviour is identical — Document at the root either way — so we
+      // cast through unknown to bypass the type narrowing.
+      const pdfBuffer = await renderToBuffer(
+        createElement(InvoicePDF, { booking: invoiceData }) as unknown as Parameters<typeof renderToBuffer>[0]
+      );
+      attachment = [
+        {
+          name: `Invoice-${booking.booking_code}.pdf`,
+          content: pdfBuffer.toString("base64"),
+        },
+      ];
+      console.log(
+        `[email] Attached invoice PDF for checkout booking=${bookingId} (${pdfBuffer.length} bytes)`
+      );
+    } catch (e) {
+      console.warn(
+        `[email] Invoice PDF generation failed for booking=${bookingId}: ${
+          e instanceof Error ? e.message : String(e)
+        }`
+      );
+    }
+  }
+
   let resp: Response;
   try {
     resp = await fetch(BREVO_ENDPOINT, {
@@ -173,6 +231,7 @@ export async function sendBookingEmail(
         replyTo: { email: REPLY_TO },
         subject,
         htmlContent: html,
+        ...(attachment ? { attachment } : {}),
       }),
     });
   } catch (e) {
