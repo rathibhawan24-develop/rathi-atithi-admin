@@ -26,6 +26,7 @@ import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { BookingActionsBar } from "./booking-actions-bar";
 import { PaymentLedger } from "./payment-ledger";
 import { NotificationsCard } from "./notifications-card";
+import { InvoiceCard } from "@/components/invoice-card";
 import { GuestEditButton } from "./guest-edit-form";
 import { StayEditButton } from "./stay-edit-form";
 import { RoomEditButton } from "./room-edit-form";
@@ -511,6 +512,9 @@ export default async function BookingDetailPage({
             log={(booking.notification_log ?? {}) as Record<string, never>}
             notificationsSent={(booking.notifications_sent ?? []) as string[]}
           />
+
+          {/* Tax Receipt */}
+          <InvoiceCard bookingCode={booking.booking_code} />
         </div>
 
         {/* RIGHT COLUMN */}
