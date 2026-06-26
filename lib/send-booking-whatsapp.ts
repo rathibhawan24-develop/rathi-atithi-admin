@@ -228,6 +228,7 @@ export async function sendBookingWhatsapp(
   } else if (stage === "checked_out") {
     stageExtras.total_paid = Math.round(paid).toString();
     stageExtras.payment_mode = modesUsed || "N/A";
+    stageExtras.invoice_url = `https://admin.rathiatithibhawan.org/i/${booking.booking_code}`;
   }
 
   const payload = {
