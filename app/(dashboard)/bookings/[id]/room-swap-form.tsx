@@ -98,12 +98,12 @@ export function RoomSwapButton({
           className="h-7 px-2 text-xs gap-1.5"
         >
           <Repeat2 className="h-3 w-3" />
-          Swap
+          Change room
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Swap room</DialogTitle>
+          <DialogTitle>Change room</DialogTitle>
           <DialogDescription>
             Move from <span className="font-medium">{currentRoomLabel}</span>{" "}
             to a different room. Guests and add-ons carry over; the new

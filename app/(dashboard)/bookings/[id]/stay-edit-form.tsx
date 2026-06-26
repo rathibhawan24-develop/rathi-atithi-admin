@@ -117,12 +117,12 @@ export function StayEditButton({ bookingId, initial, rooms }: Props) {
           className="h-7 px-2 text-xs gap-1.5"
         >
           <Edit2 className="h-3 w-3" />
-          Edit
+          Change date
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit booking</DialogTitle>
+          <DialogTitle>Change date</DialogTitle>
           <DialogDescription>
             Update stay dates, guest counts, and special requests. Rates remain
             locked at the original booking amount.
