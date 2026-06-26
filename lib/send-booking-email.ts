@@ -91,9 +91,9 @@ export async function sendBookingEmail(
       notifications_sent, created_at,
       booking_rooms (
         rate_per_night, nights, guests,
-        rooms ( room_number, room_type )
+        rooms ( room_number, room_type, name )
       ),
-      payments ( amount, mode )
+      payments ( amount, mode, paid_at )
     `
     )
     .eq("id", bookingId)

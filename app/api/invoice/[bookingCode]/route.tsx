@@ -35,13 +35,14 @@ export async function GET(
       booking_code, guest_name, phone, email,
       check_in, check_out, nights,
       paid_amount, balance, total_amount,
-      rooms_subtotal, addons_subtotal, discount_amount,
+      rooms_subtotal, addons_subtotal,
+      discount_type, discount_value, discount_amount,
       created_at,
       booking_rooms (
         rate_per_night, nights, guests,
-        rooms ( room_number, room_type )
+        rooms ( room_number, room_type, name )
       ),
-      payments ( amount, mode )
+      payments ( amount, mode, paid_at )
     `
     )
     .eq("booking_code", bookingCode)

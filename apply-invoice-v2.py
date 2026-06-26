@@ -1,4 +1,29 @@
-// lib/invoice-pdf.tsx
+#!/usr/bin/env python3
+"""
+apply-invoice-v2.py
+Rewrites the tax receipt PDF with:
+  - One line per room (#, name, nights, rate, amount)
+  - Discount line with type / percent shown when applicable
+  - Itemized payment record with mode + date
+  - Brand-aligned warm Vrindavan amber theme
+  - Cleaner spacing, no more clipped right-column values
+
+Patches three files:
+  - lib/invoice-pdf.tsx           (complete rewrite)
+  - app/api/invoice/[bookingCode]/route.tsx  (SELECT extras)
+  - lib/send-booking-email.ts     (SELECT extras for email attachment)
+"""
+
+from pathlib import Path
+import sys
+
+ROOT = Path.cwd()
+if not (ROOT / "package.json").exists():
+    print("\033[31m✗\033[0m Run from project root")
+    sys.exit(1)
+
+
+NEW_PDF = r'''// lib/invoice-pdf.tsx
 // Brand-aligned tax receipt PDF. Itemized by room, with full payment record.
 
 import {
@@ -671,3 +696,84 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
     </Document>
   );
 }
+'''
+
+
+# ============================================================================
+# 1. Rewrite lib/invoice-pdf.tsx
+# ============================================================================
+print("→ lib/invoice-pdf.tsx")
+p1 = ROOT / "lib/invoice-pdf.tsx"
+p1.write_text(NEW_PDF, encoding="utf-8")
+print("  \033[32m✓\033[0m Rewrote with itemized layout + brand theme")
+
+
+# ============================================================================
+# 2. Patch app/api/invoice/[bookingCode]/route.tsx
+# ============================================================================
+print("\n→ app/api/invoice/[bookingCode]/route.tsx")
+p2 = ROOT / "app/api/invoice/[bookingCode]/route.tsx"
+s = p2.read_text(encoding="utf-8")
+
+old_route_select = """      booking_code, guest_name, phone, email,
+      check_in, check_out, nights,
+      paid_amount, balance, total_amount,
+      rooms_subtotal, addons_subtotal, discount_amount,
+      created_at,
+      booking_rooms (
+        rate_per_night, nights, guests,
+        rooms ( room_number, room_type )
+      ),
+      payments ( amount, mode )"""
+
+new_route_select = """      booking_code, guest_name, phone, email,
+      check_in, check_out, nights,
+      paid_amount, balance, total_amount,
+      rooms_subtotal, addons_subtotal,
+      discount_type, discount_value, discount_amount,
+      created_at,
+      booking_rooms (
+        rate_per_night, nights, guests,
+        rooms ( room_number, room_type, name )
+      ),
+      payments ( amount, mode, paid_at )"""
+
+if "discount_type, discount_value, discount_amount" in s and "room_type, name" in s:
+    print("  \033[90m-\033[0m SELECT already extended")
+elif old_route_select in s:
+    s = s.replace(old_route_select, new_route_select)
+    p2.write_text(s, encoding="utf-8")
+    print("  \033[32m✓\033[0m Added discount fields, room name, paid_at")
+else:
+    print("  \033[31m✗\033[0m Could not match route SELECT — manual update needed")
+
+
+# ============================================================================
+# 3. Patch lib/send-booking-email.ts (just the rooms + payments select bits)
+# ============================================================================
+print("\n→ lib/send-booking-email.ts")
+p3 = ROOT / "lib/send-booking-email.ts"
+s = p3.read_text(encoding="utf-8")
+
+old_rooms = """      booking_rooms (
+        rate_per_night, nights, guests,
+        rooms ( room_number, room_type )
+      ),
+      payments ( amount, mode )"""
+new_rooms = """      booking_rooms (
+        rate_per_night, nights, guests,
+        rooms ( room_number, room_type, name )
+      ),
+      payments ( amount, mode, paid_at )"""
+
+if "room_type, name" in s and "amount, mode, paid_at" in s:
+    print("  \033[90m-\033[0m Email SELECT already extended")
+elif old_rooms in s:
+    s = s.replace(old_rooms, new_rooms)
+    p3.write_text(s, encoding="utf-8")
+    print("  \033[32m✓\033[0m Added room name + paid_at to email SELECT")
+else:
+    print("  \033[31m✗\033[0m Could not match email SELECT — manual update needed")
+
+
+print("\n\033[32mDone.\033[0m Run `npm run build` to verify.")
