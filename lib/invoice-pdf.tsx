@@ -144,6 +144,7 @@ export type BookingForInvoice = {
     guests: number;
     rooms: { room_number: string; room_type: string } | null;
   }>;
+  payments?: Array<{ amount: number | string; mode?: string }> | null;
 };
 
 const HOTEL = {
@@ -198,8 +199,17 @@ function fmtInt(n: number): string {
 export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
   const today = new Date();
   const totalAmount = Number(booking.total_amount);
-  const paidAmount = Number(booking.paid_amount);
-  const balance = Number(booking.balance);
+  // Compute paid amount LIVE from the payments table. bookings.paid_amount
+  // is a cached column and may lag if a trigger hasn't fired — payments
+  // are the source of truth, so we sum them directly.
+  const paymentsArr = (booking.payments ?? []) as Array<{
+    amount: number | string;
+  }>;
+  const paidAmount =
+    paymentsArr.length > 0
+      ? paymentsArr.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      : Number(booking.paid_amount);
+  const balance = totalAmount - paidAmount;
   const roomsSubtotal = Number(booking.rooms_subtotal);
   const addonsSubtotal = Number(booking.addons_subtotal);
   const discountAmount = Number(booking.discount_amount ?? 0);

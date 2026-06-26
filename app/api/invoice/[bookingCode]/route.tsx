@@ -40,7 +40,8 @@ export async function GET(
       booking_rooms (
         rate_per_night, nights, guests,
         rooms ( room_number, room_type )
-      )
+      ),
+      payments ( amount, mode )
     `
     )
     .eq("booking_code", bookingCode)
