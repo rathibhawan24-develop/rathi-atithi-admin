@@ -12,8 +12,8 @@ import { numberToIndianWords } from "./number-to-words";
 
 // Warm Vrindavan amber theme — matches the customer site
 const COLORS = {
-  brand: "#c2410c",
-  brandLightest: "#fff7ed",
+  brand: "#C96D1D",
+  brandLightest: "#FAF8F4",
   ink: "#1c1917",
   inkSoft: "#57534e",
   divider: "#e7e5e4",
@@ -526,8 +526,8 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
                 <Text style={styles.colQty}>
                   {nights} {nights === 1 ? "night" : "nights"}
                 </Text>
-                <Text style={styles.colRate}>₹ {fmt(rate)}</Text>
-                <Text style={styles.colAmount}>₹ {fmt(lineTotal)}</Text>
+                <Text style={styles.colRate}>Rs. {fmt(rate)}</Text>
+                <Text style={styles.colAmount}>Rs. {fmt(lineTotal)}</Text>
               </View>
             );
           })}
@@ -550,7 +550,7 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
               </View>
               <Text style={styles.colQty}>—</Text>
               <Text style={styles.colRate}>—</Text>
-              <Text style={styles.colAmount}>₹ {fmt(addonsSubtotal)}</Text>
+              <Text style={styles.colAmount}>Rs. {fmt(addonsSubtotal)}</Text>
             </View>
           ) : null}
 
@@ -558,7 +558,7 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
           <View style={styles.subTotalRow}>
             <Text style={styles.subTotalLabel}>Sub-total</Text>
             <Text style={styles.subTotalValue}>
-              ₹ {fmt(roomsSubtotal + addonsSubtotal)}
+              Rs. {fmt(roomsSubtotal + addonsSubtotal)}
             </Text>
           </View>
 
@@ -571,14 +571,14 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
                   ? ` (${discountValue}%)`
                   : ""}
               </Text>
-              <Text style={styles.discountValue}>- ₹ {fmt(discountAmount)}</Text>
+              <Text style={styles.discountValue}>- Rs. {fmt(discountAmount)}</Text>
             </View>
           ) : null}
 
           {/* Grand total */}
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>TOTAL AMOUNT</Text>
-            <Text style={styles.totalValue}>₹ {fmt(totalAmount)}</Text>
+            <Text style={styles.totalValue}>Rs. {fmt(totalAmount)}</Text>
           </View>
         </View>
 
@@ -610,7 +610,7 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
                   <Text
                     style={isRefund ? styles.refundValue : styles.paymentValue}
                   >
-                    {isRefund ? "- " : ""}₹ {fmt(Math.abs(amt))}
+                    {isRefund ? "- " : ""}Rs. {fmt(Math.abs(amt))}
                   </Text>
                 </View>
               );
@@ -631,7 +631,7 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
                 color: COLORS.success,
               }}
             >
-              ₹ {fmt(paidAmount)}
+              Rs. {fmt(paidAmount)}
             </Text>
           </View>
           <View style={styles.paymentTotal}>
@@ -643,7 +643,7 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
                 color: balance > 0 ? COLORS.warning : COLORS.success,
               }}
             >
-              ₹ {fmt(balance)}
+              Rs. {fmt(balance)}
             </Text>
           </View>
         </View>
@@ -652,8 +652,8 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
         <View style={styles.gstBlock}>
           <Text style={styles.gstLabel}>TAX SUMMARY</Text>
           <Text>
-            GST @ 5% (inclusive) on ₹{fmt(totalAmount)}:  CGST 2.5% = ₹
-            {fmt(cgst)}  ·  SGST 2.5% = ₹{fmt(sgst)}
+            GST @ 5% (inclusive) on Rs. {fmt(totalAmount)}:  CGST 2.5% = Rs. 
+            {fmt(cgst)}  ·  SGST 2.5% = Rs. {fmt(sgst)}
           </Text>
         </View>
 
