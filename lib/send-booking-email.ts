@@ -88,6 +88,7 @@ export async function sendBookingEmail(
       total_amount, paid_amount, balance,
       rooms_subtotal, addons_subtotal,
       discount_type, discount_value, discount_amount,
+      other_charges_amount, other_charges_note,
       notifications_sent, created_at,
       booking_rooms (
         rate_per_night, nights, guests,
@@ -157,6 +158,8 @@ export async function sendBookingEmail(
     gross_subtotal:
       Number(booking.rooms_subtotal ?? 0) +
       Number(booking.addons_subtotal ?? 0),
+    other_charges_amount: Number(booking.other_charges_amount ?? 0),
+    other_charges_note: booking.other_charges_note ?? null,
     rooms,
   };
 

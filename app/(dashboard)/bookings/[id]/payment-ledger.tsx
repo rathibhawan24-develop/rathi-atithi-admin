@@ -39,6 +39,7 @@ import {
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { addPayment, deletePayment } from "./actions";
 import { DiscountButton } from "./discount-form";
+import { OtherChargesButton } from "./other-charges-form";
 import type { Payment, PaymentMode } from "@/lib/types";
 
 type Props = {
@@ -55,6 +56,9 @@ type Props = {
   discountType: "none" | "percent" | "amount";
   discountValue: number;
   discountAmount: number;
+  // Other charges
+  otherChargesAmount: number;
+  otherChargesNote: string | null;
 };
 
 const MODE_LABELS: Record<PaymentMode, string> = {
@@ -82,7 +86,8 @@ export function PaymentLedger({
   discountType,
   discountValue,
   discountAmount,
-
+  otherChargesAmount,
+  otherChargesNote,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -204,7 +209,20 @@ export function PaymentLedger({
         </div>
       </div>
 
-      {/* Discount row */}
+      {/* Other charges line (between subtotal and discount) */}
+      {otherChargesAmount > 0 && (
+        <div className="flex items-center justify-between gap-2 pb-3 border-b border-border text-sm">
+          <span className="text-muted-foreground">
+            Other charges
+            {otherChargesNote ? ` (${otherChargesNote})` : ""}:
+          </span>
+          <span className="font-medium tabular-nums">
+            {formatCurrency(otherChargesAmount)}
+          </span>
+        </div>
+      )}
+
+      {/* Discount row + adjustment buttons */}
       {discountType !== "none" ? (
         <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border">
           <div className="flex items-center gap-2 text-sm">
@@ -218,18 +236,7 @@ export function PaymentLedger({
               (− {formatCurrency(discountAmount)})
             </span>
           </div>
-          <DiscountButton
-            bookingId={bookingId}
-            bookingStatus={bookingStatus}
-            grossSubtotal={grossSubtotal}
-            currentDiscountType={discountType}
-            currentDiscountValue={discountValue}
-            currentDiscountAmount={discountAmount}
-          />
-        </div>
-      ) : (
-        canRecordPayments && (
-          <div className="flex items-center justify-end pb-3 border-b border-border">
+          <div className="flex gap-2">
             <DiscountButton
               bookingId={bookingId}
               bookingStatus={bookingStatus}
@@ -237,6 +244,31 @@ export function PaymentLedger({
               currentDiscountType={discountType}
               currentDiscountValue={discountValue}
               currentDiscountAmount={discountAmount}
+            />
+            <OtherChargesButton
+              bookingId={bookingId}
+              bookingStatus={bookingStatus}
+              currentAmount={otherChargesAmount}
+              currentNote={otherChargesNote}
+            />
+          </div>
+        </div>
+      ) : (
+        canRecordPayments && (
+          <div className="flex items-center justify-end gap-2 pb-3 border-b border-border">
+            <DiscountButton
+              bookingId={bookingId}
+              bookingStatus={bookingStatus}
+              grossSubtotal={grossSubtotal}
+              currentDiscountType={discountType}
+              currentDiscountValue={discountValue}
+              currentDiscountAmount={discountAmount}
+            />
+            <OtherChargesButton
+              bookingId={bookingId}
+              bookingStatus={bookingStatus}
+              currentAmount={otherChargesAmount}
+              currentNote={otherChargesNote}
             />
           </div>
         )

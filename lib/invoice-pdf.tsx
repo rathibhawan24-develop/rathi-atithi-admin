@@ -302,6 +302,8 @@ export type BookingForInvoice = {
   discount_type?: "none" | "percent" | "amount" | string | null;
   discount_value?: number | string | null;
   discount_amount: number | string | null;
+  other_charges_amount?: number | string | null;
+  other_charges_note?: string | null;
   created_at: string;
   guest_city?: string | null;
   booking_rooms: Array<{
@@ -370,6 +372,8 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
   const discountAmount = Number(booking.discount_amount ?? 0);
   const discountType = booking.discount_type ?? "none";
   const discountValue = Number(booking.discount_value ?? 0);
+  const otherChargesAmount = Number(booking.other_charges_amount ?? 0);
+  const otherChargesNote = booking.other_charges_note?.trim() || "Other charges";
 
   // Live payment computation — sums from the payments table, source of truth
   const paymentsArr = (booking.payments ?? []) as Array<{
@@ -561,6 +565,18 @@ export function InvoicePDF({ booking }: { booking: BookingForInvoice }) {
               Rs. {fmt(roomsSubtotal + addonsSubtotal)}
             </Text>
           </View>
+
+          {/* Other charges line if any (between sub-total and discount) */}
+          {otherChargesAmount > 0 ? (
+            <View style={styles.tableRow}>
+              <View style={styles.colDesc}>
+                <Text style={styles.itemTitle}>{otherChargesNote}</Text>
+              </View>
+              <Text style={styles.colQty}>—</Text>
+              <Text style={styles.colRate}>—</Text>
+              <Text style={styles.colAmount}>Rs. {fmt(otherChargesAmount)}</Text>
+            </View>
+          ) : null}
 
           {/* Discount line if any */}
           {discountAmount > 0 ? (

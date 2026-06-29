@@ -638,6 +638,44 @@ export async function setBookingDiscount(
 }
 
 // =============================================================================
+// Set or clear a free-form "other charges" line on a booking
+// =============================================================================
+
+const SetOtherChargesSchema = z.object({
+  booking_id: z.string().uuid(),
+  amount: z.number().min(0, "Amount cannot be negative"),
+  note: z.string().max(200).optional().nullable(),
+});
+
+export type SetOtherChargesInput = z.infer<typeof SetOtherChargesSchema>;
+
+export async function setBookingOtherCharges(
+  input: SetOtherChargesInput
+): Promise<ActionResult> {
+  const parsed = SetOtherChargesSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  const { error } = await auth.supabase.rpc("set_booking_other_charges", {
+    p_booking_id: parsed.data.booking_id,
+    p_amount: parsed.data.amount,
+    p_note: parsed.data.note ?? null,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/bookings/${parsed.data.booking_id}`);
+  revalidatePath(`/bookings`);
+  return { success: true };
+}
+
+// =============================================================================
 // Manual resend of a notification (email or WhatsApp) for a given stage
 // =============================================================================
 const ResendNotificationSchema = z.object({

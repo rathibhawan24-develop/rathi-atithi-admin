@@ -37,6 +37,7 @@ export async function GET(
       paid_amount, balance, total_amount,
       rooms_subtotal, addons_subtotal,
       discount_type, discount_value, discount_amount,
+      other_charges_amount, other_charges_note,
       created_at,
       booking_rooms (
         rate_per_night, nights, guests,
