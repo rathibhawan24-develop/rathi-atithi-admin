@@ -10,7 +10,6 @@ import {
   X as XIcon,
   Loader2,
   AlertTriangle,
-  IndianRupee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,29 +32,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { formatCurrency } from "@/lib/utils";
-import { updateBookingStatus } from "./actions";
+import { updateBookingStatus, checkoutEntireBooking } from "./actions";
 import type { BookingStatus } from "@/lib/types";
 
 type Props = {
   bookingId: string;
   status: BookingStatus;
   hasIdProof: boolean;
-  balance: number;
+  openRoomCount: number;
 };
 
 export function BookingActionsBar({
   bookingId,
   status,
   hasIdProof,
-  balance,
+  openRoomCount,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [checkInWarning, setCheckInWarning] = useState(false);
-  const [balanceBlocked, setBalanceBlocked] = useState(false);
+  const [checkoutAllOpen, setCheckoutAllOpen] = useState(false);
 
   const runTransition = (
     newStatus: BookingStatus,
@@ -83,12 +81,20 @@ export function BookingActionsBar({
     runTransition("checked_in", undefined, "Guest checked in.");
   };
 
-  const handleCheckOut = () => {
-    if (balance > 0) {
-      setBalanceBlocked(true);
-      return;
-    }
-    runTransition("checked_out", undefined, "Guest checked out.");
+  // Full checkout now goes through checkout_entire_booking (vacates every
+  // remaining room; the DB trigger promotes the booking). No balance gate —
+  // a guest can leave with a balance owed; that's a separate billing concern.
+  const handleConfirmCheckoutAll = () => {
+    startTransition(async () => {
+      const result = await checkoutEntireBooking(bookingId);
+      if (result.success) {
+        toast.success("Guest checked out.");
+        setCheckoutAllOpen(false);
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Could not check out the booking.");
+      }
+    });
   };
 
   const handleConfirmCancel = () => {
@@ -133,7 +139,10 @@ export function BookingActionsBar({
           </Button>
         )}
         {canCheckOut && (
-          <Button onClick={handleCheckOut} disabled={isPending}>
+          <Button
+            onClick={() => setCheckoutAllOpen(true)}
+            disabled={isPending}
+          >
             {isPending ? <Loader2 className="animate-spin" /> : <LogOut />}
             Check out
           </Button>
@@ -230,25 +239,31 @@ export function BookingActionsBar({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Check-out blocked: outstanding balance */}
-      <AlertDialog open={balanceBlocked} onOpenChange={setBalanceBlocked}>
+      {/* Check out all rooms confirmation */}
+      <AlertDialog open={checkoutAllOpen} onOpenChange={setCheckoutAllOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <IndianRupee className="h-5 w-5 text-destructive" />
-              Outstanding balance: {formatCurrency(balance)}
+              <LogOut className="h-5 w-5 text-primary" />
+              Check out all {openRoomCount} room
+              {openRoomCount === 1 ? "" : "s"}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This guest cannot be checked out while a balance is owed. Please
-              record a payment for the outstanding amount, or — if the balance
-              is being written off — record an offsetting payment with a note
-              explaining why (e.g. &quot;Compensation for service issue&quot;).
-              Once balance is zero or negative, check-out will be allowed.
+              This will complete the booking and send the thank-you message to
+              the guest.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setBalanceBlocked(false)}>
-              Go to payment ledger
+            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmCheckoutAll();
+              }}
+              disabled={isPending}
+            >
+              {isPending ? <Loader2 className="animate-spin" /> : null}
+              Check out all
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

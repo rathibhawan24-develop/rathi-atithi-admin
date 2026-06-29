@@ -34,7 +34,11 @@ async function requireAuth() {
 const StatusTransitions: Record<BookingStatus, BookingStatus[]> = {
   pending: ["confirmed", "cancelled", "no_show"],
   confirmed: ["checked_in", "cancelled", "no_show"],
-  checked_in: ["checked_out", "cancelled"],
+  // checked_out is intentionally NOT here: a booking is promoted to
+  // checked_out only by tg_promote_booking_on_full_checkout (via the
+  // checkout RPCs) once every room is vacated. Status is derived, never set
+  // directly here.
+  checked_in: ["cancelled"],
   checked_out: [],
   cancelled: [],
   no_show: [],
@@ -71,7 +75,6 @@ export async function updateBookingStatus(
   const now = new Date().toISOString();
   if (newStatus === "confirmed") updates.confirmed_at = now;
   else if (newStatus === "checked_in") updates.checked_in_at = now;
-  else if (newStatus === "checked_out") updates.checked_out_at = now;
   else if (newStatus === "cancelled") {
     updates.cancelled_at = now;
     if (reason) updates.cancellation_reason = reason;
@@ -116,6 +119,78 @@ export async function updateBookingStatus(
     } catch (e) {
       console.warn(`[updateBookingStatus] whatsapp send threw:`, e);
     }
+  }
+
+  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath("/bookings");
+  revalidatePath("/");
+  return { success: true };
+}
+
+// =============================================================================
+// Partial room checkout
+// =============================================================================
+
+// Fire the thank-you email + WhatsApp for a booking that has just become fully
+// checked out. The send layer is idempotent per (booking_id, stage), so a
+// double-call from concurrent checkouts is safe. Failures are logged, not fatal.
+async function fireCheckedOutNotifications(bookingId: string) {
+  try {
+    const r = await sendBookingEmail(bookingId, "checked_out");
+    if (!r.ok) console.warn(`[checkout] email send failed: ${r.error}`);
+  } catch (e) {
+    console.warn(`[checkout] email send threw:`, e);
+  }
+  try {
+    const w = await sendBookingWhatsapp(bookingId, "checked_out");
+    if (!w.ok) console.warn(`[checkout] whatsapp send failed: ${w.error}`);
+  } catch (e) {
+    console.warn(`[checkout] whatsapp send threw:`, e);
+  }
+}
+
+// Check out a single room. The DB trigger auto-promotes the booking to
+// 'checked_out' once every room is vacated; the RPC returns true at that
+// transition so we fire the thank-you exactly once.
+export async function checkoutBookingRoom(
+  bookingRoomId: string,
+  bookingId: string
+): Promise<ActionResult> {
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  const { data, error } = await auth.supabase.rpc("checkout_booking_room", {
+    p_booking_room_id: bookingRoomId,
+  });
+  if (error) return { success: false, error: error.message };
+
+  if (data === true) {
+    await fireCheckedOutNotifications(bookingId);
+  }
+
+  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath("/bookings");
+  revalidatePath("/");
+  return { success: true };
+}
+
+// Check out every remaining room at once ("everyone leaves today"). Returns
+// true iff the booking transitioned to fully checked out.
+export async function checkoutEntireBooking(
+  bookingId: string
+): Promise<ActionResult> {
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+
+  const { data, error } = await auth.supabase.rpc("checkout_entire_booking", {
+    p_booking_id: bookingId,
+  });
+  if (error) return { success: false, error: error.message };
+
+  if (data === true) {
+    await fireCheckedOutNotifications(bookingId);
   }
 
   revalidatePath(`/bookings/${bookingId}`);

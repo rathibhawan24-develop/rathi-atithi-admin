@@ -13,6 +13,7 @@ import {
   FileText,
   StickyNote,
   AlertCircle,
+  LogOut,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -33,6 +34,7 @@ import { RoomEditButton } from "./room-edit-form";
 import { RoomSwapButton, type RoomOption } from "./room-swap-form";
 import { RoomRemoveButton } from "./room-remove-button";
 import { AddRoomButton } from "./add-room-form";
+import { CheckoutRoomButton } from "./checkout-room-button";
 import { IdProofSection } from "./id-proof-section";
 import { InternalNotesEditor } from "./internal-notes";
 import type { BookingStatus, PaymentMode } from "@/lib/types";
@@ -104,6 +106,8 @@ type BookingRow = {
     nights: number;
     guests: number;
     subtotal: number | string;
+    checked_out_at: string | null;
+    actual_nights: number | null;
     room: { id?: string; room_number: string; name: string; room_type: string; max_occupancy: number };
     booking_room_addons: Array<{
       id: string;
@@ -152,6 +156,7 @@ export default async function BookingDetailPage({
       *,
       booking_rooms (
         id, rate_per_night, nights, guests, subtotal,
+        checked_out_at, actual_nights,
         room:rooms ( id, room_number, name, room_type, max_occupancy ),
         booking_room_addons (
           id, addon_id, quantity, unit_price, total_charge,
@@ -309,7 +314,9 @@ export default async function BookingDetailPage({
             bookingId={booking.id}
             status={booking.status}
             hasIdProof={!!(booking.id_proof_type && booking.id_proof_number)}
-            balance={balance}
+            openRoomCount={
+              booking.booking_rooms.filter((br) => !br.checked_out_at).length
+            }
           />
         </div>
         {booking.status === "cancelled" && booking.cancellation_reason && (
@@ -469,6 +476,21 @@ export default async function BookingDetailPage({
                           roomLabel={`#${br.room.room_number} · ${br.room.name}`}
                           totalRoomsInBooking={booking.booking_rooms.length}
                         />
+                        {br.checked_out_at ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+                            <LogOut className="h-3 w-3" />
+                            Checked out · {formatDateTime(br.checked_out_at)}
+                          </span>
+                        ) : (
+                          booking.status !== "checked_out" &&
+                          booking.status !== "cancelled" && (
+                            <CheckoutRoomButton
+                              bookingRoomId={br.id}
+                              bookingId={booking.id}
+                              roomName={`#${br.room.room_number} · ${br.room.name}`}
+                            />
+                          )
+                        )}
                       </div>
                     </div>
                   </div>
