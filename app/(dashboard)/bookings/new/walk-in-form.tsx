@@ -11,6 +11,7 @@ import {
   Loader2,
   Save,
   Check,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,7 +144,8 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
   // Totals
   const roomsSubtotal = Object.values(selections).reduce((sum, sel) => {
     const room = availableRooms.find((r) => r.id === sel.room_id);
-    return sum + (room ? room.base_price * nights : 0);
+    if (!room) return sum;
+    return sum + (room.stay_total ?? room.base_price * nights);
   }, 0);
 
   const addonsSubtotal = Object.values(selections).reduce((sum, sel) => {
@@ -452,12 +454,26 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
                                     ? `${room.base_occupancy}+${room.extra_capacity}`
                                     : room.base_occupancy}
                                 </p>
+                                {room.override_applied && (
+                                  <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(28_75%_45%/0.12)] px-1.5 py-0.5 text-[10px] font-medium text-[hsl(28_75%_45%)]">
+                                    <Sparkles className="h-2.5 w-2.5" />
+                                    Special rate
+                                    {room.override_name
+                                      ? ` · ${room.override_name}`
+                                      : ""}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div className="text-sm font-semibold tabular-nums">
-                              {formatCurrency(room.base_price)}
+                              {formatCurrency(
+                                room.effective_nightly ?? room.base_price
+                              )}
                               <span className="text-xs font-normal text-muted-foreground">
-                                /night
+                                {room.override_applied &&
+                                room.is_uniform === false
+                                  ? " avg/night"
+                                  : "/night"}
                               </span>
                             </div>
                           </button>

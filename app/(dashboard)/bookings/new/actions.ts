@@ -137,6 +137,22 @@ export type AvailableRoom = {
   base_occupancy: number;
   extra_capacity: number;
   max_occupancy: number;
+  // Override-aware pricing for the searched window (festival/seasonal rates).
+  // Falls back to base_price * nights when no override applies.
+  stay_total?: number;
+  effective_nightly?: number;
+  is_uniform?: boolean;
+  override_applied?: boolean;
+  override_name?: string | null;
+};
+
+type EffectiveRoomPrice = {
+  room_id: string;
+  stay_total: number | string;
+  effective_nightly: number | string;
+  is_uniform: boolean;
+  override_applied: boolean;
+  override_name: string | null;
 };
 
 export async function getAvailableRooms(
@@ -161,17 +177,45 @@ export async function getAvailableRooms(
     return { rooms: [], error: error.message };
   }
 
-  return {
-    rooms: (data ?? []).map((r: AvailableRoom) => ({
-      id: r.id,
-      room_number: r.room_number,
-      name: r.name,
-      room_type: r.room_type,
-      base_price: Number(r.base_price),
-      base_occupancy: r.base_occupancy,
-      extra_capacity: r.extra_capacity,
-      max_occupancy: r.max_occupancy,
-    })),
-    error: null,
-  };
+  const baseRooms: AvailableRoom[] = (data ?? []).map((r: AvailableRoom) => ({
+    id: r.id,
+    room_number: r.room_number,
+    name: r.name,
+    room_type: r.room_type,
+    base_price: Number(r.base_price),
+    base_occupancy: r.base_occupancy,
+    extra_capacity: r.extra_capacity,
+    max_occupancy: r.max_occupancy,
+  }));
+
+  // Merge override-aware pricing for the same window. One extra query;
+  // failures fall back to base_price * nights at display time.
+  if (baseRooms.length > 0) {
+    const { data: prices, error: priceErr } = await supabase.rpc(
+      "get_effective_room_prices",
+      {
+        p_room_ids: baseRooms.map((r) => r.id),
+        p_check_in: checkIn,
+        p_check_out: checkOut,
+      }
+    );
+    if (priceErr) {
+      console.error("get_effective_room_prices failed:", priceErr);
+    } else if (prices) {
+      const byId = new Map(
+        (prices as EffectiveRoomPrice[]).map((p) => [p.room_id, p])
+      );
+      for (const room of baseRooms) {
+        const p = byId.get(room.id);
+        if (!p) continue;
+        room.stay_total = Number(p.stay_total);
+        room.effective_nightly = Number(p.effective_nightly);
+        room.is_uniform = p.is_uniform;
+        room.override_applied = p.override_applied;
+        room.override_name = p.override_name;
+      }
+    }
+  }
+
+  return { rooms: baseRooms, error: null };
 }

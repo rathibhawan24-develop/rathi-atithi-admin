@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Repeat2, Loader2 } from "lucide-react";
+import { Repeat2, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -26,6 +26,13 @@ export type RoomOption = {
   base_price: number;
   max_occupancy: number;
   is_available: boolean;
+  // Override-aware pricing for the booking's stay window.
+  // Falls back to base_price when no override applies.
+  stay_total?: number;
+  effective_nightly?: number;
+  is_uniform?: boolean;
+  override_applied?: boolean;
+  override_name?: string | null;
 };
 
 type Props = {
@@ -145,9 +152,19 @@ export function RoomSwapButton({
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {r.room_type} · capacity {r.max_occupancy}
                     </p>
+                    {r.override_applied && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(28_75%_45%/0.12)] px-1.5 py-0.5 text-[10px] font-medium text-[hsl(28_75%_45%)]">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        Special rate
+                        {r.override_name ? ` · ${r.override_name}` : ""}
+                      </span>
+                    )}
                   </div>
                   <span className="text-sm font-medium tabular-nums shrink-0">
-                    {formatCurrency(r.base_price)}/night
+                    {formatCurrency(r.effective_nightly ?? r.base_price)}
+                    {r.override_applied && r.is_uniform === false
+                      ? " avg/night"
+                      : "/night"}
                   </span>
                 </label>
               ))}
@@ -159,7 +176,13 @@ export function RoomSwapButton({
               <p>
                 New rate:{" "}
                 <span className="font-medium tabular-nums">
-                  {formatCurrency(selectedRoom.base_price)}/night
+                  {formatCurrency(
+                    selectedRoom.effective_nightly ?? selectedRoom.base_price
+                  )}
+                  {selectedRoom.override_applied &&
+                  selectedRoom.is_uniform === false
+                    ? " avg/night"
+                    : "/night"}
                 </span>
               </p>
               <p className="text-muted-foreground">

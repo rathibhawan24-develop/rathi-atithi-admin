@@ -54,7 +54,10 @@ export function AddRoomButton({
   const selectedRoom = availableRooms.find((r) => r.id === selectedRoomId);
 
   const roomSubtotal = useMemo(
-    () => (selectedRoom ? selectedRoom.base_price * nights : 0),
+    () =>
+      selectedRoom
+        ? selectedRoom.stay_total ?? selectedRoom.base_price * nights
+        : 0,
     [selectedRoom, nights]
   );
   const addonsTotal = useMemo(() => {
@@ -186,9 +189,19 @@ export function AddRoomButton({
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {r.room_type} · capacity {r.max_occupancy}
                     </p>
+                    {r.override_applied && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(28_75%_45%/0.12)] px-1.5 py-0.5 text-[10px] font-medium text-[hsl(28_75%_45%)]">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        Special rate
+                        {r.override_name ? ` · ${r.override_name}` : ""}
+                      </span>
+                    )}
                   </div>
                   <span className="text-sm font-medium tabular-nums shrink-0">
-                    {formatCurrency(r.base_price)}/night
+                    {formatCurrency(r.effective_nightly ?? r.base_price)}
+                    {r.override_applied && r.is_uniform === false
+                      ? " avg/night"
+                      : "/night"}
                   </span>
                 </label>
               ))}

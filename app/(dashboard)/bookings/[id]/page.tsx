@@ -209,6 +209,42 @@ export default async function BookingDetailPage({
     is_available: Boolean(r.is_available),
   }));
 
+  // Merge override-aware pricing for the booking's stay window into the
+  // Add Room / Swap Room pickers. Failures leave base_price as the fallback.
+  if (availableRooms.length > 0) {
+    const { data: roomPrices } = await supabase.rpc(
+      "get_effective_room_prices",
+      {
+        p_room_ids: availableRooms.map((r) => r.id),
+        p_check_in: (data as { check_in: string }).check_in,
+        p_check_out: (data as { check_out: string }).check_out,
+      }
+    );
+    if (roomPrices) {
+      const byId = new Map(
+        (
+          roomPrices as Array<{
+            room_id: string;
+            stay_total: number | string;
+            effective_nightly: number | string;
+            is_uniform: boolean;
+            override_applied: boolean;
+            override_name: string | null;
+          }>
+        ).map((p) => [p.room_id, p])
+      );
+      for (const room of availableRooms) {
+        const p = byId.get(room.id);
+        if (!p) continue;
+        room.stay_total = Number(p.stay_total);
+        room.effective_nightly = Number(p.effective_nightly);
+        room.is_uniform = p.is_uniform;
+        room.override_applied = p.override_applied;
+        room.override_name = p.override_name;
+      }
+    }
+  }
+
   const booking = data as unknown as BookingRow;
 
   // Sort payments by paid_at desc
