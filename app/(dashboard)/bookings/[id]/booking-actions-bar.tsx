@@ -10,6 +10,7 @@ import {
   X as XIcon,
   Loader2,
   AlertTriangle,
+  IndianRupee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { formatCurrency } from "@/lib/utils";
 import { updateBookingStatus, checkoutEntireBooking } from "./actions";
 import type { BookingStatus } from "@/lib/types";
 
@@ -40,6 +42,7 @@ type Props = {
   status: BookingStatus;
   hasIdProof: boolean;
   openRoomCount: number;
+  bookingBalance: number;
 };
 
 export function BookingActionsBar({
@@ -47,6 +50,7 @@ export function BookingActionsBar({
   status,
   hasIdProof,
   openRoomCount,
+  bookingBalance,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -142,6 +146,11 @@ export function BookingActionsBar({
           <Button
             onClick={() => setCheckoutAllOpen(true)}
             disabled={isPending}
+            title={
+              bookingBalance > 0
+                ? `Balance ${formatCurrency(bookingBalance, "Rs. ")} due. Record payment first.`
+                : undefined
+            }
           >
             {isPending ? <Loader2 className="animate-spin" /> : <LogOut />}
             Check out
@@ -242,30 +251,53 @@ export function BookingActionsBar({
       {/* Check out all rooms confirmation */}
       <AlertDialog open={checkoutAllOpen} onOpenChange={setCheckoutAllOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <LogOut className="h-5 w-5 text-primary" />
-              Check out all {openRoomCount} room
-              {openRoomCount === 1 ? "" : "s"}?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This will complete the booking and send the thank-you message to
-              the guest.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleConfirmCheckoutAll();
-              }}
-              disabled={isPending}
-            >
-              {isPending ? <Loader2 className="animate-spin" /> : null}
-              Check out all
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {bookingBalance > 0 ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <IndianRupee className="h-5 w-5 text-destructive" />
+                  Balance due
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Balance {formatCurrency(bookingBalance, "Rs. ")} due. Record
+                  payment first. Checking out all rooms completes the booking,
+                  which isn&apos;t allowed while a balance is owed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Close</AlertDialogCancel>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <LogOut className="h-5 w-5 text-primary" />
+                  Check out all {openRoomCount} room
+                  {openRoomCount === 1 ? "" : "s"}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will complete the booking and send the thank-you message
+                  to the guest.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isPending}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleConfirmCheckoutAll();
+                  }}
+                  disabled={isPending}
+                >
+                  {isPending ? <Loader2 className="animate-spin" /> : null}
+                  Check out all
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
     </>

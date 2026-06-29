@@ -262,6 +262,9 @@ export default async function BookingDetailPage({
   const total = Number(booking.total_amount);
   const paid = Number(booking.paid_amount);
   const balance = Number(booking.balance);
+  const openRoomCount = booking.booking_rooms.filter(
+    (br) => !br.checked_out_at
+  ).length;
   const roomsSubtotal = Number(booking.rooms_subtotal);
   const addonsSubtotal = Number(booking.addons_subtotal);
 
@@ -314,9 +317,8 @@ export default async function BookingDetailPage({
             bookingId={booking.id}
             status={booking.status}
             hasIdProof={!!(booking.id_proof_type && booking.id_proof_number)}
-            openRoomCount={
-              booking.booking_rooms.filter((br) => !br.checked_out_at).length
-            }
+            openRoomCount={openRoomCount}
+            bookingBalance={balance}
           />
         </div>
         {booking.status === "cancelled" && booking.cancellation_reason && (
@@ -488,6 +490,8 @@ export default async function BookingDetailPage({
                               bookingRoomId={br.id}
                               bookingId={booking.id}
                               roomName={`#${br.room.room_number} · ${br.room.name}`}
+                              bookingBalance={balance}
+                              openRoomCount={openRoomCount}
                             />
                           )
                         )}
