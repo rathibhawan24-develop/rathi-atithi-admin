@@ -85,6 +85,50 @@ function formatDate(iso: string): string {
   return `${parts[2]}-${parts[1]}-${parts[0]}`;
 }
 
+/**
+ * Build the human-readable room list for the check-in template, e.g.
+ *   "Barsana Supreme (Room 5), Nandgaon Supreme (Room 3)"
+ * by joining booking_rooms → rooms. Rooms are listed in the natural query
+ * order (booking_rooms insertion order). Returns "" on error or when the
+ * booking has no rooms, so the caller can still send — Fillracks simply
+ * renders an empty {{room_names}} variable rather than throwing.
+ *
+ * Note: this is only called for the checked_in stage, so the extra query
+ * runs once per check-in send, not on every lifecycle message.
+ */
+async function computeRoomNames(bookingId: string): Promise<string> {
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return "";
+  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data, error } = await supabase
+    .from("booking_rooms")
+    .select(`rooms ( name, room_number )`)
+    .eq("booking_id", bookingId);
+
+  if (error || !data) return "";
+
+  return (
+    data as unknown as Array<{
+      rooms: { name: string | null; room_number: string | null } | null;
+    }>
+  )
+    .map((br) => br.rooms)
+    .filter(
+      (r): r is { name: string | null; room_number: string | null } => !!r
+    )
+    .map((r) => {
+      const name = (r.name ?? "").trim();
+      const num = String(r.room_number ?? "").trim();
+      if (name && num) return `${name} (Room ${num})`;
+      if (name) return name;
+      return num ? `Room ${num}` : "";
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
 /** fetch with per-attempt timeout + bounded retries. Only retries on network
  *  / abort errors (not on non-2xx HTTP), since the latter means the server
  *  actively rejected the request and a retry would just get the same reject. */
@@ -225,6 +269,11 @@ export async function sendBookingWhatsapp(
   if (stage === "confirmed") {
     stageExtras.advance_paid = Math.round(paid).toString();
     stageExtras.due_amount = Math.round(due).toString();
+  } else if (stage === "checked_in") {
+    // Only the check-in template carries the concatenated room list.
+    // Until Meta approval + the Fillracks 6th-field update land, the old
+    // 5-field template config just ignores this extra key — harmless.
+    stageExtras.room_names = await computeRoomNames(bookingId);
   } else if (stage === "checked_out") {
     stageExtras.total_paid = Math.round(paid).toString();
     stageExtras.payment_mode = modesUsed || "N/A";
