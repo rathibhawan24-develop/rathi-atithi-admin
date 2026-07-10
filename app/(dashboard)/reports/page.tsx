@@ -36,7 +36,8 @@ import { ExportButtons } from "./export-buttons";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = { from?: string; to?: string };
+type SearchParams = { from?: string; to?: string; basis?: string };
+type DateBasis = "stay" | "txn";
 
 function ymd(d: Date): string {
   const y = d.getFullYear();
@@ -118,6 +119,9 @@ export default async function ReportsPage({
 
   const supabase = createClient();
   const { from, to } = parseRange(searchParams);
+  // Date basis: "stay" (default) counts by stay-overlap; "txn" counts by
+  // created_at / paid_at. See the toggle in <DateFilter />.
+  const basis: DateBasis = searchParams.basis === "txn" ? "txn" : "stay";
   const fromISO = `${from}T00:00:00.000Z`;
   const toISO = `${to}T23:59:59.999Z`;
   const daysInRange = differenceInDays(parseISO(to), parseISO(from)) + 1;
@@ -142,10 +146,12 @@ export default async function ReportsPage({
       .lte("created_at", toISO),
 
     // Bookings whose stay OVERLAPS the range — used for room-nights occupied
+    // AND (in "stay" basis) for the Bookings / Revenue / Payments cards.
+    // Overlap: check_in <= range_end AND check_out > range_start (checkout-exclusive).
     supabase
       .from("bookings")
       .select(
-        `id, check_in, check_out, status,
+        `id, check_in, check_out, status, total_amount, paid_amount, balance,
          booking_rooms ( rate_per_night, nights, room_id )`
       )
       .lte("check_in", to)
@@ -255,6 +261,9 @@ export default async function ReportsPage({
     check_in: string;
     check_out: string;
     status: string;
+    total_amount: number | string;
+    paid_amount: number | string;
+    balance: number | string;
     booking_rooms: Array<{
       rate_per_night: number | string;
       nights: number;
@@ -263,6 +272,29 @@ export default async function ReportsPage({
   };
   const overlapBookings = (bookingsOverlappingRes.data ??
     []) as unknown as BookingOverlap[];
+
+  // --- Stay-basis aggregates (bookings whose stay overlaps the range) --------
+  // Same overlap set as room-nights (excludes cancelled / no-show / expired).
+  // CAVEAT: edge-straddling stays are counted WHOLE here — a booking that only
+  // partially overlaps the range still contributes its full total_amount /
+  // paid_amount / balance. So booked_value ÷ room_nights ≠ ADR. Accepted for
+  // v1; no night-level proration of money.
+  let stayConfirmed = 0;
+  let stayPending = 0;
+  let stayInHouseOut = 0;
+  let stayBookedValue = 0;
+  let stayCollected = 0;
+  let stayBalanceDue = 0;
+  for (const b of overlapBookings) {
+    if (b.status === "confirmed") stayConfirmed += 1;
+    else if (b.status === "pending") stayPending += 1;
+    else if (b.status === "checked_in" || b.status === "checked_out")
+      stayInHouseOut += 1;
+    stayBookedValue += Number(b.total_amount);
+    stayCollected += Number(b.paid_amount);
+    stayBalanceDue += Number(b.balance);
+  }
+  const stayBookingsCount = overlapBookings.length;
 
   let roomNightsOccupied = 0;
   let roomRevenueInRange = 0;
@@ -370,6 +402,29 @@ export default async function ReportsPage({
     0
   );
 
+  // --- Basis-dependent KPI card content -------------------------------------
+  const isStay = basis === "stay";
+
+  const bookingsCardValue = isStay ? stayBookingsCount : totalBookings;
+  const bookingsCardHint = isStay
+    ? `${stayConfirmed} confirmed · ${stayPending} pending · ${stayInHouseOut} in-house/out`
+    : `${newBookingsCount} new · ${repeatBookingsCount} repeat`;
+
+  const revenueCardValue = isStay ? stayBookedValue : netRevenue;
+  const revenueCardHint = isStay
+    ? "Booked value (stays in range)"
+    : "Revenue from bookings created in this period";
+
+  const paymentsCardValue = isStay ? stayCollected : netPayments;
+  const paymentsCardHint = isStay
+    ? "Collected against these stays"
+    : "Payments received in this period";
+  const paymentsCardSub = isStay
+    ? `${formatCurrency(stayBalanceDue)} balance due`
+    : `${formatCurrency(grossPayments)} − ${formatCurrency(
+        refundsTotal
+      )} refunds`;
+
   return (
     <div className="space-y-6">
       <header className="space-y-3">
@@ -394,9 +449,9 @@ export default async function ReportsPage({
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <KpiCard
           label="Bookings"
-          value={totalBookings.toLocaleString("en-IN")}
+          value={bookingsCardValue.toLocaleString("en-IN")}
           icon={CalendarCheck}
-          hint={`${newBookingsCount} new · ${repeatBookingsCount} repeat`}
+          hint={bookingsCardHint}
         />
         <KpiCard
           label="Check-ins"
@@ -412,17 +467,16 @@ export default async function ReportsPage({
         />
         <KpiCard
           label="Revenue"
-          value={formatCurrency(netRevenue)}
+          value={formatCurrency(revenueCardValue)}
           icon={IndianRupee}
-          hint="Net (post-discount), excludes cancelled"
+          hint={revenueCardHint}
         />
         <KpiCard
           label="Payments"
-          value={formatCurrency(netPayments)}
+          value={formatCurrency(paymentsCardValue)}
           icon={CircleDollarSign}
-          hint={`${formatCurrency(grossPayments)} − ${formatCurrency(
-            refundsTotal
-          )} refunds`}
+          hint={paymentsCardHint}
+          sub={paymentsCardSub}
         />
         <KpiCard
           label="Occupancy"
@@ -710,11 +764,13 @@ function KpiCard({
   value,
   icon: Icon,
   hint,
+  sub,
 }: {
   label: string;
   value: string;
   icon: React.ComponentType<{ className?: string }>;
   hint?: string;
+  sub?: string;
 }) {
   return (
     <Card>
@@ -729,6 +785,11 @@ function KpiCard({
         {hint && (
           <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
             {hint}
+          </p>
+        )}
+        {sub && (
+          <p className="text-[11px] text-muted-foreground tabular-nums">
+            {sub}
           </p>
         )}
       </CardContent>

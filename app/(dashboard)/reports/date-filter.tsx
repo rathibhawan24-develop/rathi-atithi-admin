@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Calendar, ChevronDown } from "lucide-react";
+import { Calendar, ChevronDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,6 +100,18 @@ export function DateFilter({ from, to }: Props) {
     });
   };
 
+  const basis = sp.get("basis") === "txn" ? "txn" : "stay";
+  const applyBasis = (newBasis: "stay" | "txn") => {
+    if (newBasis === basis) return;
+    const params = new URLSearchParams(sp.toString());
+    // "stay" is the default — keep the URL clean by omitting it.
+    if (newBasis === "stay") params.delete("basis");
+    else params.set("basis", newBasis);
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`);
+    });
+  };
+
   // Detect which preset matches the current range (if any)
   const activePreset: Preset | "custom" = (() => {
     for (const p of PRESETS) {
@@ -109,8 +121,55 @@ export function DateFilter({ from, to }: Props) {
     return "custom";
   })();
 
+  const BASIS_OPTIONS: { value: "stay" | "txn"; label: string }[] = [
+    { value: "stay", label: "Stay dates" },
+    { value: "txn", label: "Transaction dates" },
+  ];
+
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground">
+          Count by
+        </span>
+        <div
+          role="group"
+          aria-label="Date basis"
+          className="inline-flex items-center rounded-md border border-border bg-muted p-0.5"
+        >
+          {BASIS_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              disabled={isPending}
+              aria-pressed={basis === o.value}
+              onClick={() => applyBasis(o.value)}
+              className={cn(
+                "h-7 rounded-[5px] px-3 text-xs transition-colors disabled:opacity-60",
+                basis === o.value
+                  ? "bg-background font-medium shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <span
+          className="inline-flex text-muted-foreground"
+          title={
+            "Stay dates: counts bookings, revenue and payments by when guests actually stay (stays overlapping your date range).\n" +
+            "Transaction dates: counts bookings/revenue by when the booking was created and payments by when they were received."
+          }
+        >
+          <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only">
+            Stay dates count by when guests stay; transaction dates count by
+            when bookings were created and payments received.
+          </span>
+        </span>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         {PRESETS.map((p) => (
           <Button
