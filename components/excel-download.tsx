@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { idProofTypeLabel, maskIdNumber } from "@/lib/utils";
 
 type BookingFilters = {
   q?: string;
@@ -109,14 +110,55 @@ export function ExcelDownload(props: Props) {
         }
         const { data, error } = await q;
         if (error) throw error;
-        rows = (data ?? []).map((g) => ({
-          "Name": g.name ?? "",
-          "Phone": g.phone,
-          "Email": g.email ?? "",
-          "Total bookings": g.total_bookings,
-          "Last booking": g.last_booking_at ?? "",
-          "First seen": g.created_at,
-        }));
+
+        // ID proof lives on `bookings`, not the `guests` view. Pull each
+        // guest's most-recent booking that has an id number, keyed on phone
+        // (same identity the guests list uses). Chunk the phone IN() list so a
+        // large guest book doesn't blow the query length.
+        const phones = Array.from(
+          new Set((data ?? []).map((g) => g.phone).filter(Boolean))
+        );
+        const idProofByPhone = new Map<
+          string,
+          { type: string | null; number: string }
+        >();
+        const CHUNK = 200;
+        for (let i = 0; i < phones.length; i += CHUNK) {
+          const slice = phones.slice(i, i + CHUNK);
+          const { data: idRows, error: idErr } = await supabase
+            .from("bookings")
+            .select("phone, id_proof_type, id_proof_number, created_at")
+            .in("phone", slice)
+            .not("id_proof_number", "is", null)
+            .order("created_at", { ascending: false });
+          if (idErr) throw idErr;
+          for (const r of (idRows ?? []) as Array<{
+            phone: string;
+            id_proof_type: string | null;
+            id_proof_number: string | null;
+            created_at: string;
+          }>) {
+            const num = (r.id_proof_number ?? "").trim();
+            if (!num || idProofByPhone.has(r.phone)) continue;
+            idProofByPhone.set(r.phone, { type: r.id_proof_type, number: num });
+          }
+        }
+
+        rows = (data ?? []).map((g) => {
+          const ip = idProofByPhone.get(g.phone);
+          return {
+            "Name": g.name ?? "",
+            "Phone": g.phone,
+            "Email": g.email ?? "",
+            "ID Proof Type": ip ? idProofTypeLabel(ip.type) || "—" : "—",
+            // Masked to last 4 only. Full ID numbers are DELIBERATELY not
+            // exported pending client sign-off (DPDP / PII).
+            "ID Proof Number": ip ? maskIdNumber(ip.number) ?? "—" : "—",
+            "Total bookings": g.total_bookings,
+            "Last booking": g.last_booking_at ?? "",
+            "First seen": g.created_at,
+          };
+        });
         sheetName = "Guests";
         filename = `guests-${today}.xlsx`;
       }

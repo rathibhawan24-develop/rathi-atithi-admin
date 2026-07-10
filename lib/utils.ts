@@ -73,3 +73,50 @@ export function formatDateTime(date: string | Date): string {
   if (hours === 0) hours = 12;
   return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
 }
+
+// ID proof (Aadhaar / PAN / DL / Voter ID …) — display helpers.
+// Same type codes as the booking ID-proof editor (id-proof-section.tsx).
+
+const ID_PROOF_TYPE_LABELS: Record<string, string> = {
+  aadhaar: "Aadhaar",
+  passport: "Passport",
+  driving_license: "Driving License",
+  voter_id: "Voter ID",
+  other: "Other",
+};
+
+export function idProofTypeLabel(type: string | null | undefined): string {
+  if (!type) return "";
+  return ID_PROOF_TYPE_LABELS[type] ?? type;
+}
+
+/**
+ * Mask an ID number so only the LAST 4 characters are visible, grouped in
+ * fours from the right (e.g. Aadhaar "1234 5678 9012" -> "XXXX XXXX 9012",
+ * PAN "ABCDE1234F" -> "XX XXXX 234F"). Returns null for empty input.
+ *
+ * PII: we NEVER surface a full ID number anywhere in the app or exports. This
+ * is the single choke point — display and Excel both go through here.
+ */
+export function maskIdNumber(raw: string | null | undefined): string | null {
+  const s = (raw ?? "").replace(/\s+/g, "").trim();
+  if (!s) return null;
+  const revealed =
+    s.length <= 4 ? s : "X".repeat(s.length - 4) + s.slice(-4);
+  const groups: string[] = [];
+  for (let i = revealed.length; i > 0; i -= 4) {
+    groups.unshift(revealed.slice(Math.max(0, i - 4), i));
+  }
+  return groups.join(" ");
+}
+
+/** "Aadhaar · XXXX XXXX 9012", or "—" when there is no ID number. */
+export function formatMaskedIdProof(
+  type: string | null | undefined,
+  number: string | null | undefined
+): string {
+  const masked = maskIdNumber(number);
+  if (!masked) return "—";
+  const label = idProofTypeLabel(type) || "ID";
+  return `${label} · ${masked}`;
+}

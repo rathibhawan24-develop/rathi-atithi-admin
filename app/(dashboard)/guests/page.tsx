@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Phone, Mail, Search, History } from "lucide-react";
+import { Users, Phone, Mail, Search, History, Fingerprint } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -8,7 +8,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatMaskedIdProof } from "@/lib/utils";
 import { ExcelDownload } from "@/components/excel-download";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +49,39 @@ export default async function GuestsPage({
 
   const { data } = await query;
   const guests = (data ?? []) as Guest[];
+
+  // ID proof is NOT on the `guests` aggregate view — it lives on `bookings`.
+  // For each guest (identity = phone, same key the row link uses), pull the
+  // id_proof from their MOST RECENT booking that actually has an id number.
+  // Query/UI layer only — no change to the guests view, and search never
+  // touches the id number.
+  const phones = Array.from(
+    new Set(guests.map((g) => g.phone).filter(Boolean))
+  );
+  const idProofByPhone = new Map<
+    string,
+    { type: string | null; number: string }
+  >();
+  if (phones.length > 0) {
+    const { data: idRows } = await supabase
+      .from("bookings")
+      .select("phone, id_proof_type, id_proof_number, created_at")
+      .in("phone", phones)
+      .not("id_proof_number", "is", null)
+      .order("created_at", { ascending: false });
+    // Rows arrive newest-first, so the first one seen per phone is the most
+    // recent booking with an id number.
+    for (const r of (idRows ?? []) as Array<{
+      phone: string;
+      id_proof_type: string | null;
+      id_proof_number: string | null;
+      created_at: string;
+    }>) {
+      const num = (r.id_proof_number ?? "").trim();
+      if (!num || idProofByPhone.has(r.phone)) continue;
+      idProofByPhone.set(r.phone, { type: r.id_proof_type, number: num });
+    }
+  }
 
   // Stats — fetch separately so they reflect the entire dataset, not just the filtered slice
   const [{ count: totalGuests }, { count: repeatGuests }] = await Promise.all([
@@ -170,6 +203,16 @@ export default async function GuestsPage({
                           {g.email}
                         </span>
                       )}
+                      <span
+                        className="inline-flex items-center gap-1 tabular-nums"
+                        title="Masked — last 4 digits only"
+                      >
+                        <Fingerprint className="h-3 w-3" />
+                        {(() => {
+                          const ip = idProofByPhone.get(g.phone);
+                          return formatMaskedIdProof(ip?.type, ip?.number);
+                        })()}
+                      </span>
                     </div>
                   </div>
                   <div className="text-right text-sm">
