@@ -34,7 +34,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatCurrency } from "@/lib/utils";
-import { updateBookingStatus, checkoutEntireBooking } from "./actions";
+import {
+  updateBookingStatus,
+  checkoutEntireBooking,
+  cancelCheckedOutBooking,
+} from "./actions";
 import type { BookingStatus } from "@/lib/types";
 
 type Props = {
@@ -58,6 +62,8 @@ export function BookingActionsBar({
   const [cancelReason, setCancelReason] = useState("");
   const [checkInWarning, setCheckInWarning] = useState(false);
   const [checkoutAllOpen, setCheckoutAllOpen] = useState(false);
+  const [cancelCheckedOutOpen, setCancelCheckedOutOpen] = useState(false);
+  const [cancelCheckedOutReason, setCancelCheckedOutReason] = useState("");
 
   const runTransition = (
     newStatus: BookingStatus,
@@ -111,14 +117,45 @@ export function BookingActionsBar({
     setCancelReason("");
   };
 
+  // Soft-cancel a checked-out booking (test / mistaken bookings). Goes through
+  // the dedicated RPC, not the normal status transition (which forbids it).
+  const cancelCheckedOutReasonValid =
+    cancelCheckedOutReason.trim().length >= 5;
+  const handleConfirmCancelCheckedOut = () => {
+    if (!cancelCheckedOutReasonValid) return;
+    startTransition(async () => {
+      const result = await cancelCheckedOutBooking({
+        booking_id: bookingId,
+        reason: cancelCheckedOutReason.trim(),
+      });
+      if (result.success) {
+        toast.success("Booking cancelled and removed from reports.");
+        setCancelCheckedOutOpen(false);
+        setCancelCheckedOutReason("");
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  };
+
   // Determine which actions are available based on current status
   const canConfirm = status === "pending";
   const canCheckIn = status === "confirmed";
   const canCheckOut = status === "checked_in";
   const canCancel = ["pending", "confirmed", "checked_in"].includes(status);
   const canMarkNoShow = ["pending", "confirmed"].includes(status);
+  // Checked-out bookings have no normal actions, but an admin can soft-cancel a
+  // test / mistaken one to pull it out of revenue and occupancy reports.
+  const canCancelCheckedOut = status === "checked_out";
 
-  if (!canConfirm && !canCheckIn && !canCheckOut && !canCancel) {
+  if (
+    !canConfirm &&
+    !canCheckIn &&
+    !canCheckOut &&
+    !canCancel &&
+    !canCancelCheckedOut
+  ) {
     return null; // terminal status — no actions
   }
 
@@ -178,6 +215,17 @@ export function BookingActionsBar({
             Cancel
           </Button>
         )}
+        {canCancelCheckedOut && (
+          <Button
+            variant="outline"
+            onClick={() => setCancelCheckedOutOpen(true)}
+            disabled={isPending}
+            className="text-destructive hover:bg-destructive/5 hover:text-destructive"
+          >
+            <XIcon />
+            Cancel booking
+          </Button>
+        )}
       </div>
 
       {/* Cancel dialog */}
@@ -212,6 +260,63 @@ export function BookingActionsBar({
               variant="destructive"
               onClick={handleConfirmCancel}
               disabled={isPending}
+            >
+              {isPending ? <Loader2 className="animate-spin" /> : null}
+              Cancel booking
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel a checked-out booking (test / mistaken cleanup) */}
+      <Dialog
+        open={cancelCheckedOutOpen}
+        onOpenChange={(o) => {
+          setCancelCheckedOutOpen(o);
+          if (!o) setCancelCheckedOutReason("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Cancel this checked-out booking?
+            </DialogTitle>
+            <DialogDescription>
+              This is a checked-out guest booking. Only cancel this if it was a
+              test booking. This will remove it from revenue and occupancy
+              reports.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="cancel_checked_out_reason">
+              Reason (required)
+            </Label>
+            <Textarea
+              id="cancel_checked_out_reason"
+              rows={3}
+              value={cancelCheckedOutReason}
+              onChange={(e) => setCancelCheckedOutReason(e.target.value)}
+              placeholder="e.g. Test booking created during setup, confirmed with Shubham."
+            />
+            {!cancelCheckedOutReasonValid && (
+              <p className="text-xs text-muted-foreground">
+                Enter at least 5 characters to enable the button.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCancelCheckedOutOpen(false)}
+              disabled={isPending}
+            >
+              Keep booking
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmCancelCheckedOut}
+              disabled={isPending || !cancelCheckedOutReasonValid}
             >
               {isPending ? <Loader2 className="animate-spin" /> : null}
               Cancel booking

@@ -751,6 +751,46 @@ export async function setBookingOtherCharges(
 }
 
 // =============================================================================
+// Cancel a checked-out booking (soft cancel — test / mistaken bookings only)
+// =============================================================================
+
+const CancelCheckedOutSchema = z.object({
+  booking_id: z.string().uuid(),
+  reason: z.string().trim().min(5, "Please give a reason (at least 5 characters)"),
+});
+
+export type CancelCheckedOutInput = z.infer<typeof CancelCheckedOutSchema>;
+
+export async function cancelCheckedOutBooking(
+  input: CancelCheckedOutInput
+): Promise<ActionResult> {
+  const parsed = CancelCheckedOutSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message ?? "Invalid input",
+    };
+  }
+  const auth = await requireAuth();
+  if (!auth.user || !auth.supabase)
+    return { success: false, error: auth.error ?? "Auth required" };
+  if (auth.role !== "admin") {
+    return { success: false, error: "Only admins can cancel a checked-out booking" };
+  }
+
+  const { error } = await auth.supabase.rpc("cancel_checked_out_booking", {
+    p_booking_id: parsed.data.booking_id,
+    p_reason: parsed.data.reason,
+  });
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/bookings/${parsed.data.booking_id}`);
+  revalidatePath("/bookings");
+  revalidatePath("/");
+  return { success: true };
+}
+
+// =============================================================================
 // Manual resend of a notification (email or WhatsApp) for a given stage
 // =============================================================================
 const ResendNotificationSchema = z.object({
