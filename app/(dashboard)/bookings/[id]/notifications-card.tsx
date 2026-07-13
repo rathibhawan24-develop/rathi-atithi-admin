@@ -14,7 +14,6 @@ import {
   Bell,
   Clock,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
 import {
   Card,
   CardContent,
@@ -24,7 +23,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTimeShort } from "@/lib/utils";
 import { resendNotification } from "./actions";
 
 type Channel = "email" | "whatsapp";
@@ -251,7 +250,7 @@ function ChannelRow({
           <StatusPill status={status} legacy={isLegacy} />
           {showTime && (
             <span className="text-[10px] text-muted-foreground tabular-nums">
-              {format(parseISO(entry!.at), "d MMM, HH:mm")}
+              {formatDateTimeShort(entry!.at)}
             </span>
           )}
         </div>

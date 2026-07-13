@@ -333,17 +333,32 @@ const HOTEL = {
   phones: "+91 82184 18154, 75000 49911",
 };
 
+// Invoice PDFs are rendered on the server (Vercel = UTC), so we must pin every
+// date to IST rather than reading the runtime wall-clock. See lib/utils.ts for
+// the full rationale.
+const IST_TIME_ZONE = "Asia/Kolkata";
+
 function formatDate(d: string | Date): string {
   const dt = typeof d === "string" ? new Date(d) : d;
-  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}`;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: IST_TIME_ZONE,
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(dt); // "Monday, Jul 13, 2026"
 }
 
 function formatShortDate(d: string | Date): string {
   const dt = typeof d === "string" ? new Date(d) : d;
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: IST_TIME_ZONE,
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).formatToParts(dt);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("day")} ${get("month")} ${get("year")}`; // "13 Jul 2026"
 }
 
 function formatMode(m?: string | null): string {
