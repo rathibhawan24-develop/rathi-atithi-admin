@@ -22,3 +22,12 @@ When you apply a migration, add its row here with the real date you ran it.
 *Dates marked "inferred" were taken from the migration file's add-commit date as a
 proxy and are **not** confirmed apply dates. Replace each with the actual date the
 migration was run in Supabase and drop the marker.*
+
+## Conventions
+
+**Timestamp rule:** `timestamptz` values (`created_at`, `paid_at`, `checked_out_at`,
+notification log `at`, …) → format via the IST util in `lib/utils.ts`
+(`formatDate` / `formatDateTime` / `formatDateTimeShort`), which pins output to
+`Asia/Kolkata` so server (Vercel = UTC) and browser render identically. Date
+columns (`check_in` / `check_out`, stored as `YYYY-MM-DD`) → render verbatim,
+**never** timezone-convert (that would shift the calendar day near midnight).
