@@ -33,6 +33,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { canViewReports } from "@/lib/types";
 import { DateFilter } from "./date-filter";
 import { ExportButtons } from "./export-buttons";
+import { InvoiceExportButton } from "./invoice-export-button";
 
 export const dynamic = "force-dynamic";
 
@@ -115,7 +116,7 @@ export default async function ReportsPage({
 }: {
   searchParams: SearchParams;
 }) {
-  await requirePermission(canViewReports, "/");
+  const role = await requirePermission(canViewReports, "/");
 
   const supabase = createClient();
   const { from, to } = parseRange(searchParams);
@@ -134,6 +135,7 @@ export default async function ReportsPage({
     outstandingRes,
     activeRoomsRes,
     allBookingPhonesEarlierRes,
+    checkedOutCountRes,
   ] = await Promise.all([
     // Bookings CREATED in the range — used for booking counts, sources,
     // new-vs-repeat, revenue components
@@ -185,6 +187,15 @@ export default async function ReportsPage({
       .from("bookings")
       .select("phone")
       .lt("created_at", fromISO),
+
+    // Checked-out bookings in range — just a count, to disable the invoice
+    // export button when there's nothing to export.
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "checked_out")
+      .gte("checked_out_at", fromISO)
+      .lte("checked_out_at", toISO),
   ]);
 
   // --- KPIs -----------------------------------------------------------------
@@ -440,7 +451,16 @@ export default async function ReportsPage({
               {daysInRange === 1 ? "" : "s"}
             </p>
           </div>
-          <ExportButtons from={from} to={to} />
+          <div className="flex items-center gap-2">
+            {role === "admin" && (
+              <InvoiceExportButton
+                from={from}
+                to={to}
+                hasInvoices={(checkedOutCountRes.count ?? 0) > 0}
+              />
+            )}
+            <ExportButtons from={from} to={to} />
+          </div>
         </div>
         <DateFilter from={from} to={to} />
       </header>

@@ -1,6 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/server";
 import { canViewReports } from "@/lib/types";
+import type { PaymentMode } from "@/lib/types";
+import { formatDate } from "@/lib/utils";
+
+const MODE_LABEL: Record<PaymentMode, string> = {
+  upi: "UPI",
+  cash: "Cash",
+  bank: "Bank transfer",
+};
+
+// rows may be empty (zero bookings in range) — headers is the fallback so
+// the download still has a header row instead of a blank sheet.
+function xlsxResponse(
+  filename: string,
+  rows: Record<string, unknown>[],
+  headers: string[]
+): NextResponse {
+  const sheet =
+    rows.length > 0
+      ? XLSX.utils.json_to_sheet(rows)
+      : XLSX.utils.aoa_to_sheet([headers]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet, "Invoices");
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  return new NextResponse(new Uint8Array(buf), {
+    status: 200,
+    headers: {
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
 
 // Tiny CSV helper. Quotes only fields that need it (commas, quotes, newlines).
 function csvCell(v: unknown): string {
@@ -37,7 +71,10 @@ export async function GET(req: NextRequest) {
   const from = sp.get("from");
   const to = sp.get("to");
 
-  if (!type || !["bookings", "payments", "outstanding"].includes(type)) {
+  if (
+    !type ||
+    !["bookings", "payments", "outstanding", "invoices"].includes(type)
+  ) {
     return new NextResponse("Invalid 'type' parameter", { status: 400 });
   }
   if (!isValidDate(from) || !isValidDate(to)) {
@@ -60,6 +97,11 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
   const role = (profileRow?.role ?? null) as Parameters<typeof canViewReports>[0];
   if (!canViewReports(role)) {
+    return new NextResponse("Permission denied", { status: 403 });
+  }
+  // Invoice export carries GST-filing data — admin only, tighter than the
+  // rest of the Reports page (which manager/viewer can also see).
+  if (type === "invoices" && role !== "admin") {
     return new NextResponse("Permission denied", { status: 403 });
   }
 
@@ -225,6 +267,78 @@ export async function GET(req: NextRequest) {
       `rathi-outstanding-${from}-to-${to}.csv`,
       lines.join("\n")
     );
+  }
+
+  if (type === "invoices") {
+    // total_amount is GST-inclusive (locked requirement) — back-calculate
+    // the pre-tax amount and the 5% GST split from it rather than storing
+    // or recomputing tax anywhere else.
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("id, booking_code, guest_name, total_amount, checked_out_at")
+      .eq("status", "checked_out")
+      .gte("checked_out_at", fromISO)
+      .lte("checked_out_at", toISO)
+      .order("checked_out_at", { ascending: true });
+    if (error) return new NextResponse(error.message, { status: 500 });
+
+    const bookings = (data ?? []) as unknown as Array<{
+      id: string;
+      booking_code: string;
+      guest_name: string;
+      total_amount: number;
+      checked_out_at: string;
+    }>;
+
+    const HEADERS = [
+      "Invoice Number", "Amount (before tax)", "GST 5%", "Total Amount",
+      "Payment Mode", "Guest Name", "Check-out Date",
+    ];
+    const filename = `invoices_${from!.replace(/-/g, "")}_${to!.replace(/-/g, "")}.xlsx`;
+
+    if (bookings.length === 0) {
+      return xlsxResponse(filename, [], HEADERS);
+    }
+
+    // Payment mode per booking — every mode that appears, in the order it
+    // was first paid, comma-joined (e.g. "UPI, Cash" for a split payment).
+    const bookingIds = bookings.map((b) => b.id);
+    const { data: paymentRows, error: payErr } = await supabase
+      .from("payments")
+      .select("booking_id, mode, paid_at")
+      .in("booking_id", bookingIds)
+      .order("paid_at", { ascending: true });
+    if (payErr) return new NextResponse(payErr.message, { status: 500 });
+
+    const modesByBooking = new Map<string, string[]>();
+    for (const p of (paymentRows ?? []) as unknown as Array<{
+      booking_id: string;
+      mode: PaymentMode;
+    }>) {
+      const seen = modesByBooking.get(p.booking_id) ?? [];
+      if (!seen.includes(p.mode)) seen.push(p.mode);
+      modesByBooking.set(p.booking_id, seen);
+    }
+
+    const rows = bookings.map((b) => {
+      const total = Number(b.total_amount);
+      const beforeTax = Math.round((total / 1.05) * 100) / 100;
+      const gst = Math.round((total - beforeTax) * 100) / 100;
+      const modes = modesByBooking.get(b.id);
+      return {
+        "Invoice Number": b.booking_code,
+        "Amount (before tax)": beforeTax,
+        "GST 5%": gst,
+        "Total Amount": total,
+        "Payment Mode": modes?.length
+          ? modes.map((m) => MODE_LABEL[m as PaymentMode]).join(", ")
+          : "Not recorded",
+        "Guest Name": b.guest_name,
+        "Check-out Date": formatDate(b.checked_out_at).replace(/ /g, "-"),
+      };
+    });
+
+    return xlsxResponse(filename, rows, HEADERS);
   }
 
   return new NextResponse("Invalid type", { status: 400 });
