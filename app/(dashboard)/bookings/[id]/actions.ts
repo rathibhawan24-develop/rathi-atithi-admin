@@ -7,6 +7,7 @@ import { sendBookingEmail } from "@/lib/send-booking-email";
 import { sendBookingWhatsapp } from "@/lib/send-booking-whatsapp";
 import type { EmailStage } from "@/lib/email-templates";
 import type { BookingStatus } from "@/lib/types";
+import { formatCurrency } from "@/lib/utils";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -226,6 +227,28 @@ export async function addPayment(input: PaymentInput): Promise<ActionResult> {
   const auth = await requireAuth();
   if (!auth.user || !auth.supabase)
     return { success: false, error: auth.error ?? "Auth required" };
+
+  // Refunds (negative amount) reduce the balance and are always fine. A
+  // payment (positive) can't exceed what's actually owed — re-read the
+  // balance here rather than trusting a client-supplied value, since the
+  // form prefills it and a stale/duplicate submit would otherwise double it.
+  if (parsed.data.amount > 0) {
+    const { data: booking, error: balErr } = await auth.supabase
+      .from("bookings")
+      .select("balance")
+      .eq("id", parsed.data.booking_id)
+      .single();
+    if (balErr || !booking) {
+      return { success: false, error: balErr?.message ?? "Booking not found" };
+    }
+    const balance = Number(booking.balance);
+    if (parsed.data.amount > balance) {
+      return {
+        success: false,
+        error: `Amount exceeds balance due (${formatCurrency(Math.max(balance, 0))}). Record a refund entry instead if this is an overpayment.`,
+      };
+    }
+  }
 
   const { error } = await auth.supabase.from("payments").insert({
     booking_id: parsed.data.booking_id,

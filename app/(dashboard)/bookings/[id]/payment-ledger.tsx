@@ -125,6 +125,12 @@ export function PaymentLedger({
       toast.error("Amount must be greater than zero.");
       return;
     }
+    if (!isRefund && amount > balance) {
+      toast.error(
+        `Amount exceeds balance due (${formatCurrency(Math.max(balance, 0))}).`
+      );
+      return;
+    }
     const signedAmount = isRefund ? -Math.abs(amount) : Math.abs(amount);
 
     startTransition(async () => {
@@ -389,6 +395,7 @@ export function PaymentLedger({
                     id="amount"
                     type="number"
                     min="0"
+                    max={isRefund ? undefined : Math.max(balance, 0)}
                     step="50"
                     value={amount || ""}
                     onChange={(e) => setAmount(Number(e.target.value))}
