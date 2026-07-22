@@ -11,19 +11,24 @@ const MODE_LABEL: Record<PaymentMode, string> = {
   bank: "Bank transfer",
 };
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 // rows may be empty (zero bookings in range) — headers is the fallback so
-// the download still has a header row instead of a blank sheet.
+// the sheet still has a header row instead of being blank.
 function xlsxResponse(
   filename: string,
-  rows: Record<string, unknown>[],
-  headers: string[]
+  sheets: Array<{ name: string; rows: Record<string, unknown>[]; headers: string[] }>
 ): NextResponse {
-  const sheet =
-    rows.length > 0
-      ? XLSX.utils.json_to_sheet(rows)
-      : XLSX.utils.aoa_to_sheet([headers]);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, sheet, "Invoices");
+  for (const { name, rows, headers } of sheets) {
+    const sheet =
+      rows.length > 0
+        ? XLSX.utils.json_to_sheet(rows)
+        : XLSX.utils.aoa_to_sheet([headers]);
+    XLSX.utils.book_append_sheet(wb, sheet, name);
+  }
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   return new NextResponse(new Uint8Array(buf), {
     status: 200,
@@ -290,40 +295,61 @@ export async function GET(req: NextRequest) {
       checked_out_at: string;
     }>;
 
-    const HEADERS = [
+    const INVOICE_HEADERS = [
       "Invoice Number", "Amount (before tax)", "GST 5%", "Total Amount",
       "Payment Mode", "Guest Name", "Check-out Date",
+    ];
+    const RECON_HEADERS = [
+      "Booking Code", "Guest Name", "Total Paid", "Cash", "UPI", "Bank",
+      "Check-out Date",
     ];
     const filename = `invoices_${from!.replace(/-/g, "")}_${to!.replace(/-/g, "")}.xlsx`;
 
     if (bookings.length === 0) {
-      return xlsxResponse(filename, [], HEADERS);
+      return xlsxResponse(filename, [
+        { name: "Invoices", rows: [], headers: INVOICE_HEADERS },
+        { name: "Payment reconciliation", rows: [], headers: RECON_HEADERS },
+      ]);
     }
 
-    // Payment mode per booking — every mode that appears, in the order it
-    // was first paid, comma-joined (e.g. "UPI, Cash" for a split payment).
+    // Payment breakdown per booking — modes in first-paid order (for the
+    // Invoices sheet's "UPI, Cash" style summary) and per-mode totals (for
+    // the reconciliation sheet).
     const bookingIds = bookings.map((b) => b.id);
     const { data: paymentRows, error: payErr } = await supabase
       .from("payments")
-      .select("booking_id, mode, paid_at")
+      .select("booking_id, mode, amount, paid_at")
       .in("booking_id", bookingIds)
       .order("paid_at", { ascending: true });
     if (payErr) return new NextResponse(payErr.message, { status: 500 });
 
     const modesByBooking = new Map<string, string[]>();
+    const totalsByBooking = new Map<
+      string,
+      { total: number; cash: number; upi: number; bank: number }
+    >();
     for (const p of (paymentRows ?? []) as unknown as Array<{
       booking_id: string;
       mode: PaymentMode;
+      amount: number;
     }>) {
       const seen = modesByBooking.get(p.booking_id) ?? [];
       if (!seen.includes(p.mode)) seen.push(p.mode);
       modesByBooking.set(p.booking_id, seen);
+
+      const t = totalsByBooking.get(p.booking_id) ?? {
+        total: 0, cash: 0, upi: 0, bank: 0,
+      };
+      const amt = Number(p.amount);
+      t.total += amt;
+      t[p.mode] += amt;
+      totalsByBooking.set(p.booking_id, t);
     }
 
-    const rows = bookings.map((b) => {
+    const invoiceRows = bookings.map((b) => {
       const total = Number(b.total_amount);
-      const beforeTax = Math.round((total / 1.05) * 100) / 100;
-      const gst = Math.round((total - beforeTax) * 100) / 100;
+      const beforeTax = round2(total / 1.05);
+      const gst = round2(total - beforeTax);
       const modes = modesByBooking.get(b.id);
       return {
         "Invoice Number": b.booking_code,
@@ -338,7 +364,23 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return xlsxResponse(filename, rows, HEADERS);
+    const reconRows = bookings.map((b) => {
+      const t = totalsByBooking.get(b.id);
+      return {
+        "Booking Code": b.booking_code,
+        "Guest Name": b.guest_name,
+        "Total Paid": t ? round2(t.total) : "Not recorded",
+        "Cash": t ? round2(t.cash) : 0,
+        "UPI": t ? round2(t.upi) : 0,
+        "Bank": t ? round2(t.bank) : 0,
+        "Check-out Date": formatDate(b.checked_out_at).replace(/ /g, "-"),
+      };
+    });
+
+    return xlsxResponse(filename, [
+      { name: "Invoices", rows: invoiceRows, headers: INVOICE_HEADERS },
+      { name: "Payment reconciliation", rows: reconRows, headers: RECON_HEADERS },
+    ]);
   }
 
   return new NextResponse("Invalid type", { status: 400 });
