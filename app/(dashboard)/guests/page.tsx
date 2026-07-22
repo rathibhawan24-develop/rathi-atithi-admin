@@ -174,7 +174,7 @@ export default async function GuestsPage({
               {guests.map((g) => (
                 <Link
                   key={g.id}
-                  href={`/bookings?search=${encodeURIComponent(g.phone)}`}
+                  href={`/bookings?q=${encodeURIComponent(g.phone)}`}
                   className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
                 >
                   <div className="flex-1 min-w-[200px]">
