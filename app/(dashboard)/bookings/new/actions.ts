@@ -6,6 +6,15 @@ import { z } from "zod";
 import { sendBookingEmail } from "@/lib/send-booking-email";
 import { sendBookingWhatsapp } from "@/lib/send-booking-whatsapp";
 
+// "Today" in IST, independent of the server's runtime timezone (Vercel runs
+// UTC). Used only to bound the backdated-walk-in window — see the IST
+// convention note in migrations/applied.md.
+function istDateISO(offsetDays = 0): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(d);
+}
+
 const RoomSelectionSchema = z.object({
   room_id: z.string().uuid(),
   guests: z.number().int().min(1),
@@ -43,6 +52,7 @@ const WalkInBookingSchema = z.object({
   rooms: z.array(RoomSelectionSchema).min(1, "At least one room is required"),
   addons: z.array(AddonSelectionSchema),
   initial_payment: PaymentSchema.nullable(),
+  backdated_reason: z.string().optional(),
 });
 
 export type WalkInBookingInput = z.infer<typeof WalkInBookingSchema>;
@@ -65,6 +75,26 @@ export async function createWalkInBooking(
   // Cross-field check on dates
   if (parsed.data.check_out <= parsed.data.check_in) {
     return { success: false, error: "Check-out must be after check-in" };
+  }
+
+  // Backdated check-in: capped to the last 2 days, and only with a reason.
+  // The RPC itself doesn't restrict check_in to today-or-later, so this is
+  // the only gate — enforced server-side, not just via the date picker's
+  // min/max in the client.
+  if (parsed.data.check_in < istDateISO(0)) {
+    if (parsed.data.check_in < istDateISO(-2)) {
+      return {
+        success: false,
+        error: "Check-in date cannot be more than 2 days in the past",
+      };
+    }
+    if ((parsed.data.backdated_reason ?? "").trim().length < 10) {
+      return {
+        success: false,
+        error:
+          "A reason (min 10 characters) is required for a backdated check-in",
+      };
+    }
   }
 
   const supabase = createClient();
@@ -94,6 +124,21 @@ export async function createWalkInBooking(
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.booking_id || !row?.booking_code) {
     return { success: false, error: "Booking created but no ID returned" };
+  }
+
+  // create_walk_in_booking has no p_internal_notes param (no schema/RPC
+  // change for this), so the backdated reason is recorded with a follow-up
+  // update — same column + pattern as the internal-notes editor.
+  if (parsed.data.backdated_reason) {
+    const { error: noteError } = await supabase
+      .from("bookings")
+      .update({
+        internal_notes: `[BACKDATED ENTRY] ${parsed.data.backdated_reason.trim()}`,
+      })
+      .eq("id", row.booking_id);
+    if (noteError) {
+      console.warn("[walk-in] failed to save backdated reason note:", noteError);
+    }
   }
 
   revalidatePath("/bookings");

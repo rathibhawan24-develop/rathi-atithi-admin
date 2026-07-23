@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
@@ -35,21 +36,23 @@ type RoomSelection = {
 
 const TYPE_ORDER = ["Supreme", "4 Bed", "Deluxe", "Sudama 6 Bed"];
 
-function todayISO(): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
+function formatISO(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function tomorrowISO(): string {
-  const now = new Date();
-  now.setDate(now.getDate() + 1);
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+function dateISO(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return formatISO(d);
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return formatISO(d);
 }
 
 function calcNights(checkIn: string, checkOut: string): number {
@@ -69,8 +72,20 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
   const [address, setAddress] = useState("");
 
   // Dates
-  const [checkIn, setCheckIn] = useState(todayISO());
-  const [checkOut, setCheckOut] = useState(tomorrowISO());
+  const [checkIn, setCheckIn] = useState(dateISO(0));
+  const [checkOut, setCheckOut] = useState(dateISO(1));
+
+  // Backdated walk-in (admin override, up to 2 days in the past)
+  const [backdated, setBackdated] = useState(false);
+  const [backdatedReason, setBackdatedReason] = useState("");
+  const handleBackdatedToggle = (checked: boolean) => {
+    setBackdated(checked);
+    if (!checked) {
+      setCheckIn(dateISO(0));
+      setCheckOut(dateISO(1));
+      setBackdatedReason("");
+    }
+  };
 
   // Available rooms (fetched after dates change)
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>([]);
@@ -227,6 +242,10 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
       toast.error("Enter a payment amount or disable the payment section.");
       return;
     }
+    if (backdated && backdatedReason.trim().length < 10) {
+      toast.error("Reason for backdated entry must be at least 10 characters.");
+      return;
+    }
 
     const rooms = Object.values(selections).map((s) => ({
       room_id: s.room_id,
@@ -261,6 +280,7 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
         rooms,
         addons: addonsFlat,
         initial_payment,
+        backdated_reason: backdated ? backdatedReason.trim() : undefined,
       });
 
       if (result.success) {
@@ -335,6 +355,23 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex items-center gap-3 rounded-md border border-dashed border-input px-3 py-2.5">
+            <Switch
+              id="backdated"
+              checked={backdated}
+              onCheckedChange={handleBackdatedToggle}
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="backdated" className="cursor-pointer">
+                Backdated walk-in / Override check-in date
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                For late arrivals or missed entries. Allows check-in up to 2
+                days in the past.
+              </p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="check_in">Check-in *</Label>
@@ -342,8 +379,12 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
                 id="check_in"
                 type="date"
                 value={checkIn}
-                onChange={(e) => setCheckIn(e.target.value)}
-                min={todayISO()}
+                onChange={(e) => {
+                  setCheckIn(e.target.value);
+                  if (backdated) setCheckOut(addDaysISO(e.target.value, 1));
+                }}
+                min={backdated ? dateISO(-2) : dateISO(0)}
+                max={backdated ? dateISO(0) : undefined}
                 required
               />
             </div>
@@ -365,6 +406,23 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
               </div>
             </div>
           </div>
+          {backdated && (
+            <div className="space-y-2">
+              <Label htmlFor="backdated_reason">
+                Reason for backdated entry (late arrival, missed entry,
+                etc.) *
+              </Label>
+              <Textarea
+                id="backdated_reason"
+                rows={2}
+                value={backdatedReason}
+                onChange={(e) => setBackdatedReason(e.target.value)}
+                placeholder="Minimum 10 characters"
+                required
+                minLength={10}
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="special_requests">Special requests (optional)</Label>
             <Textarea
@@ -715,7 +773,11 @@ export function WalkInForm({ addons }: { addons: Addon[] }) {
             </Button>
             <Button
               type="submit"
-              disabled={isPending || Object.keys(selections).length === 0}
+              disabled={
+                isPending ||
+                Object.keys(selections).length === 0 ||
+                (backdated && backdatedReason.trim().length < 10)
+              }
             >
               {isPending ? (
                 <Loader2 className="animate-spin" />
